@@ -1,0 +1,69 @@
+# ============================================================
+# Woo Digital Downloads — .gitignore
+# ============================================================
+
+# ── Composer ─────────────────────────────────────────────────
+/vendor/
+composer.lock
+
+# ── Node / NPM ───────────────────────────────────────────────
+/node_modules/
+npm-debug.log*
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# ── Build output ─────────────────────────────────────────────
+/dist/
+/build/
+
+# ── PHP tools ────────────────────────────────────────────────
+/.phpunit.cache/
+/.phpunit.result.cache
+/phpunit.xml
+/.php-cs-fixer.cache
+/.phpstan/
+/phpstan.neon
+
+# ── Environment & secrets ────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.secret
+
+# ── OS files ─────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# ── IDE / Editor ─────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ── WordPress specifics ──────────────────────────────────────
+# Ignore uploaded plugin ZIPs stored locally during dev
+/uploads/
+/tmp/
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+/logs/
+
+# ── Test coverage ────────────────────────────────────────────
+/coverage/
+/tests/coverage/
+.nyc_output/
+
+# ── Plugin ZIP releases ──────────────────────────────────────
+# Built release ZIPs sit outside the repo
+*.zip
+!tests/fixtures/*.zip

@@ -1,72 +1,98 @@
-
 <?php
 /**
- * Plugin Name:       WooDigital Downloads
- * Plugin URI:        https://yourwebsite.com/woo-digital-downloads
+ * Plugin Name:       Woo Digital Downloads
+ * Plugin URI:        https://x.com/woo-digital-downloads
  * Description:       The ultimate digital downloads extension for WooCommerce — a powerful alternative to Easy Digital Downloads.
  * Version:           1.0.0
- * Author:            WooDigital Downloads
- * Author URI:        WooDigital Team
+ * Requires at least: 6.0
+ * Requires PHP:      8.0
+ * Author:            XpeedStudio
+ * Author URI:        https://x.com
  * License:           GPL-3.0+
  * License URI:       https://www.gnu.org/licenses/gpl-3.0.html
  * Text Domain:       woo-digital-downloads
  * Domain Path:       /languages
- * Requires PHP:      7.4
- * Requires at least: 6.0
  * WC requires at least: 8.0
- * WC tested up to: 9.0
+ * WC tested up to:      9.0
+ *
+ * @package WooDigitalDownloads
  */
 
-// If this file is called directly, abort.
-if ( ! defined( 'WPINC' ) ) {
-    die;
-}
+defined( 'ABSPATH' ) || exit;
 
-define( 'WDD_FILE',        __FILE__ );
+define( 'WDD_FILE',          __FILE__ );
 // Retrieve the version dynamically from this file's header comments
 $plugin_data = get_file_data( WDD_FILE, array( 'Version' => 'Version' ), 'plugin' );
 $plugin_version = ! empty( $plugin_data['Version'] ) ? $plugin_data['Version'] : '0.0.1';
 // Define plugin constants
 define( 'WDD_VERSION', $plugin_version );
-define( 'WDD_PLUGIN_DIR', plugin_dir_path( WDD_FILE ) );
-define( 'WDD_PLUGIN_URL', plugin_dir_url( WDD_FILE ) );
+
+define( 'WDD_PATH',          plugin_dir_path( WDD_FILE ) );
+define( 'WDD_URL',           plugin_dir_url( WDD_FILE ) );
+define( 'WDD_BASENAME',      plugin_basename( WDD_FILE ) );
+define( 'WDD_API_NAMESPACE', 'wdd/v1' );
+
+// Back-compat aliases used internally.
+define( 'WDD_PLUGIN_DIR',  WDD_PATH );
+define( 'WDD_PLUGIN_URL',  WDD_URL );
 define( 'WDD_PLUGIN_FILE', WDD_FILE );
 
-// Check if WooCommerce is active
-if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) ) ) {
-    add_action( 'admin_notices', function() {
-        ?>
-        <div class="error">
-            <p><strong>WooDigital Downloads</strong> requires WooCommerce to be installed and activated.</p>
-        </div>
-        <?php
-    });
+// Composer autoloader 
+if ( file_exists( WDD_PATH . 'vendor/autoload.php' ) ) {
+    require_once WDD_PATH . 'vendor/autoload.php';
+} else {
+    add_action( 'admin_notices', static function (): void {
+        printf(
+            '<div class="notice notice-error"><p>%s</p></div>',
+            esc_html__(
+                'Woo Digital Downloads: vendor/ directory not found. Run "composer install" in the plugin directory.',
+                'woo-digital-downloads'
+            )
+        );
+    } );
     return;
 }
 
-/**
- * PSR-4 autoloader — WooDigitalDownloads\ maps to includes/.
- */
-if ( file_exists( WDD_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
-	// Dev-only fallback (no Jetpack Autoloader installed yet).
-	require_once WDD_PLUGIN_DIR . 'vendor/autoload.php';
-} else {
-	add_action( 'admin_notices', function (): void {
-		echo '<div class="notice notice-error"><p>';
-		echo esc_html__(
-			'WooDigital Downloads: vendor/ directory not found. Run "composer install" in the plugin directory.',
-			'WooDigital Downloads'
-		);
-		echo '</p></div>';
-	} );
-	return;
-}
+// WooCommerce dependency check
 
-// Initialize the plugin
-add_action( 'plugins_loaded', function() {
-    \WooDigitalDownloads\Woo_Digital_Downloads::instance();
+add_action( 'plugins_loaded', static function (): void {
+    if ( ! class_exists( 'WooCommerce' ) ) {
+        add_action( 'admin_notices', static function (): void {
+            printf(
+                '<div class="notice notice-error"><p>%s</p></div>',
+                esc_html__( 'Woo Digital Downloads requires WooCommerce to be installed and active.', 'woo-digital-downloads' )
+            );
+        } );
+        return;
+    }
+
+    load_plugin_textdomain( 'woo-digital-downloads', false, WDD_PATH . 'languages' );
+
+    \WooDigitalDownloads\Plugin::instance();
 }, 11 );
 
+// HPOS compatibility
 
-register_activation_hook( WDD_FILE,   [ \WooDigitalDownloads\Plugin::class, 'activate' ] );
-register_deactivation_hook( WDD_FILE, [ \WooDigitalDownloads\Plugin::class, 'deactivate' ] );
+add_action( 'before_woocommerce_init', static function (): void {
+    if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
+            'custom_order_tables',
+            WDD_FILE,
+            true
+        );
+    }
+} );
+
+// Activation / Deactivation
+
+register_activation_hook( WDD_FILE,   [ \WooDigitalDownloads\Activator::class, 'activate' ] );
+register_deactivation_hook( WDD_FILE, [ \WooDigitalDownloads\Activator::class, 'deactivate' ] );
+
+/**
+ * Global helper — returns the plugin singleton.
+ *
+ * @return \WooDigitalDownloads\Plugin
+ */
+function wdd(): \WooDigitalDownloads\Plugin {
+    return \WooDigitalDownloads\Plugin::instance();
+}

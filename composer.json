@@ -5,7 +5,7 @@
     "type": "wordpress-plugin",
     "license": "GPL-3.0-or-later",
     "require": {
-        "php": ">=8.0",
+        "php": ">=8.0"
     },
     "require-dev": {
         "php-stubs/wordpress-stubs": "^6.9",
