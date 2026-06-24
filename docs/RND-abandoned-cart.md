@@ -2,206 +2,296 @@
 **Plugin:** woo-digital-downloads
 **Module:** Abandoned Cart Recovery
 **Phase:** 5
-**Standalone:** Yes — webhook bridge only; does not depend on any other WDD module
+**Standalone:** Yes — works without any other WDD module
+**Third-party dependency:** None — fully built-in
 
 ---
 
 ## Overview
 
-WDD does not build an abandoned cart email engine. Instead, it fires standardized WordPress action hooks so that any existing abandoned cart plugin can integrate without custom code. This keeps WDD lean and lets store owners use whatever cart recovery tool they already have (or the best-in-class free option).
+The Abandoned Cart Recovery module is a complete, self-contained cart recovery system built directly into WDD. It detects when a cart containing WDD products is abandoned, saves the cart state to a dedicated DB table, and sends a configurable sequence of recovery emails using WooCommerce's own email engine. No external plugin, service, or API is required.
 
----
-
-## Why a Bridge, Not a Full Feature?
-
-Cart abandonment email engines are a solved problem with excellent free options:
-
-| Plugin | Installs | Rating | Cost |
-|---|---|---|---|
-| Cart Abandonment Recovery (Brainstorm Force) | 300,000+ | 4.8/5 | Free |
-| Abandoned Cart Lite (Tychesoftwares) | 20,000+ | 4.1/5 | Free |
-| CartBounty | 10,000+ | 4.8/5 | Free |
-| WC Recover Abandoned Cart (FantasticPlugins) | 4,984 sales | 4.70/5 | $49 |
-
-Building a competing email sequence engine would duplicate effort, require SMTP configuration, and add GDPR complexity. A hook bridge achieves better results with far less code.
+When the customer returns via the recovery link, their cart is restored automatically and a coupon (optionally auto-generated) can be applied.
 
 ---
 
 ## Standalone Usage
 
-Enable the Abandoned Cart module in **Settings → Digital Downloads → Modules**.
+Enable this module in **Settings → Digital Downloads → Modules → Abandoned Cart**.
 
-This module:
-- Monitors WooCommerce cart sessions for WDD product types (`wdd_plugin`, `wdd_saas`, `wdd_bundle`)
-- Fires `wdd_cart_abandoned` when a cart with WDD products is detected as abandoned
-- Fires `wdd_cart_recovered` when the customer returns and completes the order
-- Passes cart content details (product IDs, values, customer identity if known) in the hook payload
+This module independently:
+- Monitors WooCommerce cart sessions for any product (not just WDD types)
+- Detects abandonment after a configurable inactivity window (default: 60 min)
+- Persists cart data in `wp_wdd_abandoned_carts`
+- Sends up to 3 recovery emails via `wp_mail()` using WooCommerce HTML email templates
+- Generates one-click cart-restore links (cryptographically signed)
+- Tracks recovery rate per campaign
+- Optionally auto-generates and applies WooCommerce discount coupons in recovery emails
 
-**No other WDD module is required.**
-
----
-
-## Integration: WDD Hooks → Third-Party AC Plugins
-
-### Hook: `wdd_cart_abandoned`
-
-```php
-/**
- * Fired when a cart containing WDD products is detected as abandoned.
- *
- * @param int   $user_id        0 for guest, WordPress user ID for logged-in users
- * @param array $cart_contents  Array of WC cart items filtered to WDD products
- * @param float $cart_total     Total value of abandoned cart
- * @param string $customer_email Email if known (from checkout field or logged-in user)
- */
-do_action( 'wdd_cart_abandoned', $user_id, $cart_contents, $cart_total, $customer_email );
-```
-
-### Hook: `wdd_cart_recovered`
-
-```php
-/**
- * Fired when an abandoned cart is recovered (order completed).
- *
- * @param int $user_id   WordPress user ID
- * @param int $order_id  WooCommerce order ID
- * @param float $order_total  Total value of recovered order
- */
-do_action( 'wdd_cart_recovered', $user_id, $order_id, $order_total );
-```
-
-### Hook: `wdd_cart_reminder_sent`
-
-```php
-/**
- * Fired after WDD sends a cart reminder (if built-in email is enabled).
- *
- * @param string $customer_email
- * @param int    $attempt  Which reminder attempt (1, 2, 3)
- */
-do_action( 'wdd_cart_reminder_sent', $customer_email, $attempt );
-```
+No other WDD module, no third-party plugin, and no external email service are required.
 
 ---
 
-## Cart Abandonment Detection Strategy
+## Architecture
 
-Cart abandonment is detected via WooCommerce session data with a configurable timeout (default: 60 minutes of inactivity).
+### Classes
 
-```php
-// Scheduled via Action Scheduler, runs every 15 minutes
-class AbandonedCart {
-
-    public function check_abandoned_carts(): void {
-        $threshold = time() - ( get_option( 'wdd_abandon_timeout', 60 ) * MINUTE_IN_SECONDS );
-
-        // Query WC sessions updated before threshold that have WDD cart items
-        // Fire wdd_cart_abandoned for each qualifying session
-    }
-
-    public function on_order_completed( int $order_id ): void {
-        // Remove cart from abandoned tracking
-        // Fire wdd_cart_recovered
-    }
-}
-```
-
----
-
-## Integration Example: Cart Abandonment Recovery (Brainstorm Force)
-
-Brainstorm Force's "Cart Abandonment Recovery" plugin does not natively know about WDD cart events. To bridge:
-
-```php
-// In your theme's functions.php or a custom plugin
-add_action( 'wdd_cart_abandoned', function( $user_id, $cart_contents, $cart_total, $email ) {
-    // CAR plugin stores abandoned carts in its own table
-    // You can insert directly or trigger its own capture mechanism
-    if ( function_exists( 'wcf_ca_capture_cart' ) ) {
-        wcf_ca_capture_cart( $email, $cart_contents, $cart_total );
-    }
-}, 10, 4 );
-```
-
----
-
-## Integration Example: CartBounty
-
-CartBounty has native WooCommerce hooks but also exposes its own action: `cartbounty_save_cart`. WDD fires its hook first, then CartBounty takes over:
-
-```php
-add_action( 'wdd_cart_abandoned', function( $user_id, $cart_contents, $cart_total, $email ) {
-    // CartBounty will pick this up automatically if WC session is active.
-    // No extra code needed — WDD hook fires at the same point WC session is readable.
-}, 10, 4 );
-```
-
----
-
-## Admin Settings
-
-**Settings → Digital Downloads → Abandoned Cart**
-
-| Setting | Default | Description |
+| Class | File | Responsibility |
 |---|---|---|
-| Enable abandoned cart tracking | Off | Master toggle for this module |
-| Abandonment timeout (minutes) | 60 | How long before a cart is considered abandoned |
-| Track guest carts | Off | Capture carts before email is entered |
-| Built-in reminder email | Off | Enable WDD's own recovery email (basic) |
-| Reminder 1 delay (minutes) | 60 | Send first reminder after N minutes |
-| Reminder 2 delay (minutes) | 1440 | Send second reminder after N minutes (24h) |
-| Reminder 3 delay (minutes) | 4320 | Send third reminder after N minutes (72h) |
+| `CartWatcher` | `includes/AbandonedCart/CartWatcher.php` | Detect and record abandoned carts |
+| `CartRestorer` | `includes/AbandonedCart/CartRestorer.php` | Restore cart from recovery link |
+| `RecoveryEmailer` | `includes/AbandonedCart/RecoveryEmailer.php` | Send sequenced recovery emails |
+| `RecoveryCoupon` | `includes/AbandonedCart/RecoveryCoupon.php` | Auto-generate WC discount coupons |
+| `AbandonedCartReport` | `includes/AbandonedCart/AbandonedCartReport.php` | Track and report recovery rate |
 
 ---
 
-## Recommended Third-Party Plugin
+## Abandonment Detection Flow
 
-**Cart Abandonment Recovery by Brainstorm Force**
-- Free, 300,000+ installs, 4.8/5 rating
-- URL: https://wordpress.org/plugins/woo-cart-abandonment-recovery/
-- Works alongside WDD via standard WooCommerce hooks
-- Handles email templates, UTM tracking, coupon generation
+```
+WooCommerce session updated (customer adds to cart)
+    │
+    └── CartWatcher::on_cart_updated()
+            ├── If cart is empty → skip
+            ├── If order was just placed → mark recovered, stop sequence
+            └── Upsert wp_wdd_abandoned_carts
+                    {session_id, user_id, email, cart_contents, cart_total, status: 'active'}
+
+Action Scheduler: wdd_scan_abandoned_carts (every 15 min)
+    │
+    └── CartWatcher::scan()
+            SELECT carts where:
+                status = 'active'
+                AND last_activity < NOW() - INTERVAL {timeout} MINUTE
+                AND customer_email IS NOT NULL
+            │
+            └── For each qualifying cart:
+                    UPDATE status = 'abandoned'
+                    Schedule RecoveryEmailer::send_sequence(cart_id)
+```
 
 ---
 
-## Phase 5 Implementation Plan
+## Recovery Email Sequence
 
-1. `AbandonedCart` class in `includes/Marketing/AbandonedCart.php`
-2. Action Scheduler job: `wdd_check_abandoned_carts` every 15 minutes
-3. DB table: `wp_wdd_abandoned_carts` (session hash, cart data, email, status, timestamps)
-4. Admin settings page section
-5. Optional built-in email template (HTML, respects WooCommerce email styles)
-6. Recovery link generation tied to WDD cart restore endpoint
+Three emails sent via Action Scheduler, using WooCommerce's HTML email infrastructure:
+
+| Step | Delay | Subject (customizable) | Coupon |
+|---|---|---|---|
+| Email 1 | 1 hour after abandonment | "You left something behind!" | Optional (configurable %) |
+| Email 2 | 24 hours after abandonment | "Still thinking it over?" | Optional (higher %) |
+| Email 3 | 72 hours after abandonment | "Last chance — your cart expires soon" | Optional (highest %) |
+
+Each email contains:
+- Cart item summary (product name, price, thumbnail)
+- **One-click restore link** — signed URL that restores the exact cart in one click
+- Coupon code (if enabled), auto-applied on cart restore
+- Unsubscribe link (GDPR-compliant opt-out stored in DB)
+
+### Email Template Override
+
+Templates follow WooCommerce's override convention:
+
+```
+your-theme/
+└── woocommerce/
+    └── emails/
+        ├── wdd-abandoned-cart-1.php
+        ├── wdd-abandoned-cart-2.php
+        └── wdd-abandoned-cart-3.php
+```
 
 ---
 
-## DB Table: `wp_wdd_abandoned_carts`
+## Cart Restore Link
+
+```
+https://store.com/?wdd_restore={signed_token}
+```
+
+`CartRestorer::generate_restore_token()` creates a 64-char hex token stored in DB:
+
+```php
+$token = bin2hex( random_bytes( 32 ) ); // 64 hex chars
+// Stored in wp_wdd_abandoned_carts.restore_token
+// Expires: 7 days after abandonment (configurable)
+```
+
+`CartRestorer::handle_restore()` runs on `init`:
+1. Validate token exists and is not expired
+2. Load cart contents from DB
+3. Clear current WC session cart
+4. Add all items back via `WC()->cart->add_to_cart()`
+5. Auto-apply coupon if configured
+6. Redirect to checkout
+7. Mark cart as `recovered` in DB
+
+---
+
+## Auto-Generated Coupons
+
+`RecoveryCoupon::create()` generates a WooCommerce coupon programmatically:
+
+```php
+$coupon = new WC_Coupon();
+$coupon->set_code( 'WDD-RECOVER-' . strtoupper( wp_generate_password( 8, false ) ) );
+$coupon->set_discount_type( 'percent' );           // or 'fixed_cart'
+$coupon->set_amount( $discount_percent );
+$coupon->set_usage_limit( 1 );                    // single use
+$coupon->set_usage_limit_per_user( 1 );
+$coupon->set_date_expires( time() + ( 7 * DAY_IN_SECONDS ) );
+$coupon->set_individual_use( true );
+$coupon->save();
+```
+
+Coupon is embedded in the recovery email and auto-applied on restore link click.
+
+---
+
+## Database Table
+
+### `wp_wdd_abandoned_carts`
 
 ```sql
 CREATE TABLE {prefix}wdd_abandoned_carts (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     session_id      VARCHAR(255) NOT NULL,
     user_id         BIGINT UNSIGNED DEFAULT 0,
-    customer_email  VARCHAR(255),
-    cart_contents   LONGTEXT NOT NULL,
+    customer_email  VARCHAR(255) DEFAULT NULL,
+    customer_name   VARCHAR(255) DEFAULT NULL,
+    cart_contents   LONGTEXT NOT NULL,              -- JSON serialized cart
     cart_total      DECIMAL(10,2) DEFAULT 0.00,
-    status          ENUM('abandoned','recovered','reminder_1_sent','reminder_2_sent','reminder_3_sent') DEFAULT 'abandoned',
-    abandoned_at    DATETIME NOT NULL,
-    recovered_at    DATETIME NULL,
-    recovery_link   VARCHAR(500),
+    currency        VARCHAR(10) DEFAULT 'USD',
+    status          ENUM(
+                        'active',           -- cart is live, not yet abandoned
+                        'abandoned',        -- inactivity threshold crossed
+                        'email_1_sent',
+                        'email_2_sent',
+                        'email_3_sent',
+                        'recovered',        -- order placed after abandon
+                        'unsubscribed'      -- customer opted out
+                    ) DEFAULT 'active',
+    restore_token   CHAR(64) DEFAULT NULL UNIQUE,
+    coupon_code     VARCHAR(100) DEFAULT NULL,
+    abandoned_at    DATETIME DEFAULT NULL,
+    recovered_at    DATETIME DEFAULT NULL,
+    restore_token_expires_at DATETIME DEFAULT NULL,
+    last_activity   DATETIME NOT NULL,
+    created_at      DATETIME NOT NULL,
     PRIMARY KEY (id),
+    KEY idx_session (session_id),
     KEY idx_email (customer_email),
     KEY idx_status (status),
-    KEY idx_abandoned_at (abandoned_at)
+    KEY idx_abandoned_at (abandoned_at),
+    KEY idx_restore_token (restore_token)
 );
 ```
 
 ---
 
-## References
+## REST API Endpoints (Admin)
 
-- Cart Abandonment Recovery (Brainstorm Force): https://wordpress.org/plugins/woo-cart-abandonment-recovery/
-- CartBounty: https://wordpress.org/plugins/woo-save-abandoned-carts/
-- Abandoned Cart Lite (Tychesoftwares): https://wordpress.org/plugins/woocommerce-abandoned-cart/
-- WC Recover Abandoned Cart (FantasticPlugins): https://codecanyon.net/item/woocommerce-recover-abandoned-cart/7715167
-- Action Scheduler: https://actionscheduler.org
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/wdd/v1/abandoned-carts` | manage_woocommerce | List abandoned carts with filters |
+| `GET` | `/wdd/v1/abandoned-carts/{id}` | manage_woocommerce | Get single cart detail |
+| `POST` | `/wdd/v1/abandoned-carts/{id}/send-email` | manage_woocommerce | Manually trigger recovery email |
+| `DELETE` | `/wdd/v1/abandoned-carts/{id}` | manage_woocommerce | Delete cart record |
+
+---
+
+## Admin Dashboard
+
+**Digital Downloads → Abandoned Carts**
+
+| Column | Description |
+|---|---|
+| Customer | Name + email |
+| Cart Value | Total value |
+| Products | Item names |
+| Abandoned At | Date/time |
+| Emails Sent | 0 / 1 / 2 / 3 |
+| Status | Badge: abandoned / email_1_sent / recovered |
+| Actions | Send email now, View cart, Delete |
+
+**Recovery Stats panel (top of page):**
+- Total abandoned (last 30 days)
+- Total recovered
+- Recovery rate %
+- Revenue recovered $
+
+---
+
+## Configuration Options
+
+**Settings → Digital Downloads → Abandoned Cart**
+
+| Option | Default | Description |
+|---|---|---|
+| Enable module | Off | Master toggle |
+| Abandonment timeout | 60 min | Inactivity before cart is "abandoned" |
+| Capture guest carts | Off | Track carts before email is known |
+| Email 1 — delay | 60 min | Time after abandonment |
+| Email 1 — subject | "You left something behind!" | Customizable |
+| Email 1 — coupon | Off | Enable auto-coupon |
+| Email 1 — coupon % | 0 | Discount percentage |
+| Email 2 — delay | 1440 min (24h) | |
+| Email 2 — coupon % | 10 | |
+| Email 3 — delay | 4320 min (72h) | |
+| Email 3 — coupon % | 15 | |
+| Restore link expiry | 7 days | Days before restore token expires |
+| Stop sequence on purchase | On | Cancel scheduled emails if order placed |
+
+---
+
+## GDPR Compliance
+
+- Unsubscribe link in every email → sets `status = 'unsubscribed'`, clears email
+- WooCommerce privacy eraser hooked: erases all cart records for a user on erasure request
+- IP address is never stored in cart records
+- Cart data is purged after `wdd_abandoned_cart_retention_days` (default: 90 days) via scheduled cleanup
+
+---
+
+## Developer Hooks
+
+```php
+// Fired when a cart is first detected as abandoned
+do_action( 'wdd_cart_abandoned', $cart_id, $user_id, $customer_email, $cart_total );
+
+// Fired after each recovery email is sent
+do_action( 'wdd_cart_recovery_email_sent', $cart_id, $email_step, $customer_email );
+
+// Fired when cart is restored from recovery link
+do_action( 'wdd_cart_restored', $cart_id, $user_id );
+
+// Fired when cart is recovered (order placed)
+do_action( 'wdd_cart_recovered', $cart_id, $order_id );
+
+// Filter: modify cart restore token expiry (seconds)
+apply_filters( 'wdd_cart_restore_token_expiry', 7 * DAY_IN_SECONDS, $cart_id );
+
+// Filter: modify coupon amount per email step
+apply_filters( 'wdd_cart_recovery_coupon_amount', $amount, $step, $cart_id );
+
+// Filter: skip email for a specific cart
+apply_filters( 'wdd_cart_recovery_skip_email', false, $cart_id, $step );
+```
+
+---
+
+## Competitor Comparison
+
+| Feature | Cart Abandonment Recovery (Brainstorm Force) | WooCommerce Abandoned Cart (Tychesoftwares) | CartBounty | woo-digital-downloads |
+|---|---|---|---|---|
+| Built into plugin (no install) | ❌ Separate plugin | ❌ Separate plugin | ❌ Separate plugin | **✅ Built-in** |
+| Third-party dependency | ❌ Required | ❌ Required | ❌ Required | **✅ None** |
+| WC email infrastructure | ✅ | ✅ | ✅ | **✅** |
+| Auto-coupon generation | ✅ | ✅ (Pro) | ✅ (Pro) | **✅ Built-in** |
+| One-click cart restore | ✅ | ✅ | ✅ | **✅ Signed token** |
+| Recovery rate reporting | ✅ | ✅ | ✅ | **✅ Built-in** |
+| GDPR unsubscribe | ✅ | ✅ | ✅ | **✅ Built-in** |
+| Action Scheduler | ✅ | ✅ | ❌ | **✅** |
+| Guest cart capture | ✅ | ✅ | ✅ | **✅ Optional** |
+| Configurable email sequence | 3 emails | 3 emails (Pro) | 3 emails (Pro) | **✅ 3 emails** |
+| Price | Free | Free / Pro | Free / Pro | **✅ Included in WDD** |

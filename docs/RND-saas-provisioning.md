@@ -268,6 +268,24 @@ do_action( 'wdd_api_key_rotated', $account_id, $new_api_key );
 
 ---
 
+## Competitor Comparison
+
+| Feature | WooCommerce Native | SureCart | EDD | woo-digital-downloads |
+|---|---|---|---|---|
+| SaaS account auto-provisioning | ❌ None | ✅ Partial (SaaS backend) | ❌ None | **✅ Full webhook-based** |
+| API key generation | ❌ | ❌ | ❌ | **✅ `wdd_` prefix + 48 hex chars** |
+| JWT token issuance | ❌ | ❌ | ❌ | **✅ HS256, firebase/php-jwt** |
+| Outbound webhook on provision | ❌ | ✅ (their infra) | ❌ | **✅ HMAC-SHA256 signed** |
+| Outbound webhook on refund/cancel | ❌ | ✅ | ❌ | **✅ Automatic** |
+| Plan upgrade/downgrade sync | ❌ | ✅ | ❌ | **✅ `plan_change` webhook event** |
+| Self-hosted (data stays on your server) | ✅ | ❌ SaaS backend | ✅ | **✅** |
+| WooCommerce native | ✅ | ❌ Replaces WC | ❌ | **✅** |
+| Refresh tokens (server-side) | ❌ | ❌ | ❌ | **✅ 30-day refresh** |
+| Account status in My Account | ❌ | ✅ | ❌ | **✅ API Keys tab** |
+| Double-provisioning prevention | ❌ | ✅ | ❌ | **✅ `_wdd_provisioned` meta guard** |
+
+---
+
 ## JWT Library Decision
 
 Two WordPress JWT plugins were evaluated:

@@ -266,6 +266,24 @@ Admin can force-clear analytics cache via **Settings → Digital Downloads → A
 
 ---
 
+## Competitor Comparison
+
+| Feature | WooCommerce Analytics | EDD Reports | SureCart Analytics | woo-digital-downloads |
+|---|---|---|---|---|
+| MRR / ARR | ❌ | ❌ | ✅ (SaaS-side) | **✅ From WDD subscription table** |
+| Churn rate | ❌ | ❌ | ✅ (SaaS-side) | **✅ Cancellations / active at period start** |
+| Active license count | ❌ | ✅ (EDD only) | ❌ | **✅ Real-time from wp_wdd_licenses** |
+| License expiry forecast | ❌ | ❌ | ❌ | **✅ Expiring in 30/60/90 days** |
+| Download stats by product | ❌ | ✅ | ❌ | **✅ Per product, per version** |
+| Version adoption heatmap | ❌ | ❌ | ❌ | **✅ % of customers on each version** |
+| Geo distribution of downloads | ❌ | ❌ | ❌ | **✅ Country breakdown** |
+| CSV export | ✅ (orders only) | ✅ | Partial | **✅ Revenue, licenses, downloads** |
+| WooCommerce native | ✅ | ❌ | ❌ | **✅** |
+| Self-hosted (no SaaS backend) | ✅ | ✅ | ❌ | **✅** |
+| Transient-cached queries | ❌ | Partial | ❌ | **✅ 1-hour TTL, admin-clearable** |
+
+---
+
 ## Future Extensions (Post-Phase 6)
 
 - **Cohort analysis:** Revenue retention by signup month

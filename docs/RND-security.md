@@ -236,6 +236,23 @@ Not implemented in Phase 3 MVP; planned as an opt-in option in Phase 3 final.
 
 ---
 
+## Competitor Comparison
+
+| Feature | WooCommerce Native | EDD | Wordfence | woo-digital-downloads |
+|---|---|---|---|---|
+| License activation rate limiting | ❌ | Partial | ❌ | **✅ WP transients, per-IP, configurable** |
+| Multi-country / shared license detection | ❌ | ❌ | ❌ | **✅ Country threshold per license** |
+| Geo-blocking on downloads | ❌ | ❌ | Premium only | **✅ ip-api.com / MaxMind GeoLite2** |
+| SHA-256 checksum on update ZIPs | ❌ | ❌ | ❌ | **✅ Server + client verification** |
+| Concurrent download detection | ❌ | ❌ | ❌ | **✅ Multi-IP same token detection** |
+| Remote license kill-switch | ❌ | ✅ (paid) | ❌ | **✅ Instant revoke via REST** |
+| Staging/localhost exemption | ❌ | Basic | ❌ | **✅ Pattern-based, no activation cost** |
+| Webhook HMAC-SHA256 signing | ❌ | ❌ | ❌ | **✅ X-WDD-Sig on all outbound calls** |
+| GDPR-aware IP logging | ❌ | Partial | ❌ | **✅ Erasure hook, configurable retention** |
+| Zero extra plugin dependencies | — | Paid add-on | Separate plugin | **✅ Built into WDD** |
+
+---
+
 ## Developer Hooks
 
 ```php
