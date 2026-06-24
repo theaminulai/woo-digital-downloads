@@ -1,16 +1,37 @@
 # R&D Document — woo-digital-downloads
-**Project:** `woo-digital-downloads`  
-**Path:** `D:\wampserver\www\wp-plugin\digital-downloads\wp-content\plugins\woo-digital-downloads`  
-**Date:** 2026-06-24  
+**Project:** `woo-digital-downloads`
+**Path:** `D:\wampserver\www\wp-plugin\digital-downloads\wp-content\plugins\woo-digital-downloads`
+**Date:** 2026-06-24
 **Goal:** A WooCommerce extension that sells and manages WordPress Plugins and SaaS Products from a single platform — with licensing, auto-updates, secure downloads, subscription billing, SaaS provisioning, and anti-piracy built in.
+
+> **Modular Architecture:** Every feature in this plugin is independently operable. A store selling only downloadable files can enable just the Downloads module. A store needing only license keys enables only Licensing. A SaaS company can run only SaaS Provisioning. Features integrate with each other when both are enabled but never require one another unless explicitly noted.
+
+---
+
+## Feature Modules
+
+| Module | Phase | Standalone? | Key Classes |
+|---|---|---|---|
+| Secure Downloads | 1 | Yes | TokenManager, DownloadDispatcher |
+| Licensing | 1 | Yes | LicenseGenerator, LicenseActivator |
+| Plugin Updates | 1 | Yes (or with Licensing) | UpdateServer, VersionManager |
+| SaaS Provisioning | 2 | Yes | AccountProvisioner, JwtIssuer |
+| Subscriptions | 2 | Yes (tracks WC recurring) | SubscriptionManager, DunningManager |
+| Security & Anti-Piracy | 3 | Partial | RateLimiter, GeoBlocker, AbuseDetector |
+| Git Integration | 4 | Requires Updates | GitHubSync |
+| Abandoned Cart | 5 | Yes (webhook bridge) | AbandonedCart |
+| Affiliates | 5 | Yes (webhook bridge) | AffiliateConnector |
+| Analytics | 6 | Yes | RevenueReport, LicenseReport |
+
+See individual feature RND files in this docs/ folder for detailed specifications per module.
 
 ---
 
 ## 1. Competitive Landscape
 
 ### 1.1 Easy Digital Downloads (EDD)
-**URL:** https://easydigitaldownloads.com  
-**Model:** Self-hosted WordPress plugin. Free core + paid extensions.  
+**URL:** https://easydigitaldownloads.com
+**Model:** Self-hosted WordPress plugin. Free core + paid extensions.
 **Trusted by:** 50,000+ businesses, 187 countries, 30M+ orders processed, 13+ years.
 
 **What's free in EDD core:**
@@ -39,7 +60,7 @@
 
 **EDD Pricing (2026):**
 - Free core: 3% transaction fee
-- $99/yr – 1 site (transaction fee on cheapest plan)
+- $99/yr – 1 site
 - $199/yr – 1 site, more features
 - $299/yr – 2 sites
 - $499/yr – 3 sites
@@ -50,130 +71,141 @@
 - Purpose-built: expiring download links, download attempt limits, IP tracking included free
 - Huge ecosystem and documentation
 - REST API included
-- Used by major WordPress companies (WPForms, MonsterInsights, etc.)
 
 **EDD Weaknesses:**
 - Add-on cost stacks up fast ($499–$999/yr for full features on 3 sites)
 - No lifetime license option
-- No built-in order bumps or post-purchase upsells
-- No cart abandonment built-in
-- No affiliate system built-in
+- No built-in order bumps, cart abandonment, or affiliate system
 - UI uses shortcodes, no visual checkout builder
-- You manage your own server, backups, and email deliverability
 
 ---
 
 ### 1.2 SureCart
-**URL:** https://surecart.com  
-**Model:** Managed eCommerce platform (SaaS backend + WordPress frontend plugin).  
+**URL:** https://surecart.com
+**Model:** Managed eCommerce platform (SaaS backend + WordPress frontend plugin).
 **Ratings:** 4.8/5 WordPress, 4.7/5 G2, 4.3/5 Trustpilot
-
-**Key differentiator:** Managed infrastructure — SureCart handles uptime, auto-scaling, backups, security, and email deliverability. You own the data.
 
 **Pricing:**
 | Plan | 1 Store | 5 Stores | Unlimited |
 |---|---|---|---|
 | Free (Launch) | $0 + 2.9% fee | $0 + 2.9% fee | $0 + 2.9% fee |
-| Pro Yearly | $179/yr (renews $199) | $249/yr (renews $299) | $399/yr (renews $499) |
+| Pro Yearly | $179/yr | $249/yr | $399/yr |
 | Pro Lifetime | $599 one-time | $999 one-time | $1,699 one-time |
 
-All features available on all plans (no feature gating). Only difference is transaction fee (free plan) and number of stores.
-
-**SureCart vs EDD — Key Differences:**
-
-| Feature | SureCart | EDD |
-|---|---|---|
-| Managed infrastructure | Yes — 24/7 monitoring, auto-scaling | No — you manage |
-| Checkout builder | Visual drag-and-drop | Shortcodes only |
-| Checkout types | Instant, Store, Custom | Store only |
-| Affiliate management | Built-in | $199/yr paid plugin |
-| Real-time VAT/tax | Built-in | Manual only (~$40–80/mo 3rd party) |
-| Order bumps | Yes | No |
-| Post-purchase upsells | Yes | No |
-| Cart abandonment | Yes | Paid plugin |
-| Subscription saver (dunning) | Yes, customizable | Auto only, no customization |
-| Name your own price | Yes | No |
-| AWS secure file storage | Included | Extra cost |
-| Backups | Automatic | You handle |
-| Email deliverability | Managed by SureCart | You configure SMTP |
-| Physical + digital + SaaS | All supported | Primarily digital |
-| Agency suite | Yes (centralized multi-store) | No |
-| Lifetime plans | Yes | No |
-
-**SureCart Strengths:**
-- Truly all-in-one with zero add-on cost for core features
-- Managed infrastructure removes server management overhead
-- Modern checkout with visual builder
-- Real-time VAT/tax compliance included
-- Lifetime pricing option
-
 **SureCart Weaknesses:**
-- Backend is SaaS (data lives on SureCart servers even though you own it)
-- Less WordPress-native than self-hosted alternatives
+- Backend is SaaS — data lives on SureCart servers
 - No dedicated WordPress plugin software licensing extension
 - Relatively newer, smaller ecosystem
 
 ---
 
 ### 1.3 FluentCart
-**URL:** https://fluentcart.com  
-**By:** WPManageNinja (same team as FluentCRM, FluentForms, FluentSupport)  
-**Model:** Self-hosted WordPress plugin. Free core + Pro license.  
-
-**Interesting context:** WPManageNinja built FluentCart because they outgrew EDD themselves ("we've used EDD since 2017 — but as we scaled, add-on overload and feature gaps made things complex").
-
-**FluentCart vs EDD — Key Differences:**
-
-| Feature | FluentCart | EDD |
-|---|---|---|
-| Subscriptions | Built-in | $209/yr paid extension |
-| Software licensing | Built-in | $199/yr paid extension |
-| Hybrid products (plugin + SaaS) | Native support | Limited |
-| Physical products | Supported | Paid extension |
-| Invoices | Built-in | $29/yr paid extension |
-| Instalment payments | Built-in | Paid extension |
-| Custom receipts | Built-in | Paid extension |
-| AWS file storage | Built-in | Extra cost |
-| Customer portal | Full dashboard | History via shortcode |
-| Checkout UI | Modern, streamlined | Basic, less flexible |
-| REST API | Yes | Yes |
-| Headless support | Yes | Yes |
-| Refund management | Built-in | Varies by gateway |
-| Product variations | Native | Partial via extension |
-| Email marketing | FluentCRM integration | Paid extensions |
-
-**FluentCart Real Cost Comparison vs EDD:**
-| Feature | FluentCart | EDD (annual cost) |
-|---|---|---|
-| License management | Included | $199/yr |
-| Subscriptions | Included | $209/yr |
-| Email marketing integration | FluentCRM (separate tool) | $77/yr |
-| Invoices & receipts | Included | $29/yr |
-| Total | One flat fee | $499–$999/yr for 3 sites |
+**URL:** https://fluentcart.com
+**By:** WPManageNinja (FluentCRM, FluentForms, FluentSupport team)
+**Model:** Self-hosted WordPress plugin. Free core + Pro license.
 
 **FluentCart Strengths:**
-- Self-hosted (full control, data on your server)
-- Built by team who knows the pain of scaling on EDD
+- Self-hosted, full control
 - Licensing and subscriptions built-in from day one
 - Headless REST API support
-- Deep integration with Fluent ecosystem (CRM, Affiliate, Support, Community)
-- 16+ Elementor widgets, Gutenberg blocks
-- Earlybird lifetime deal starting from $249
+- Deep Fluent ecosystem integration
+- Earlybird lifetime deal from $249
 
 **FluentCart Weaknesses:**
-- Newer product — smaller ecosystem and user base than EDD
-- Fluent ecosystem integrations are best-in-class but can create platform lock-in
-- No managed infrastructure (you still host yourself)
+- Newer, smaller ecosystem
+- No managed infrastructure
+
+---
+
+### 1.4 SUMO Subscriptions for WooCommerce
+**URL:** https://codecanyon.net/item/sumo-subscriptions-woocommerce-subscription-system/16486054
+**By:** FantasticPlugins | **Price:** $49 | **Sales:** 5,063 | **Rating:** 4.38/5 | **Version:** 17.5.0 (Feb 2026)
+
+WooCommerce-native subscription plugin. Covers Simple, Variable, Grouped products plus "Order Subscriptions" (attach billing to any product). Automatic renewal via Stripe and PayPal. Mixed cart (subscription + non-subscription). Upgrade/Downgrade with proration. Customer pause/cancel/resubscribe. Drip content. HPOS + Blocks + REST API + WPML.
+
+**Weaknesses:** Single-site license only. No software licensing. No SaaS provisioning. No update delivery. Automatic renewal limited to Stripe/PayPal only. Membership/Donations require separate paid plugins.
+
+---
+
+### 1.5 Abandoned Cart Recovery — Ecosystem Research
+
+| Plugin | Price | Installs | Rating | Notable |
+|---|---|---|---|---|
+| Cart Abandonment Recovery (Brainstorm Force) | Free | 300,000+ | 4.8/5 | Market leader, free coupons, 1-click recovery |
+| WC Recover Abandoned Cart (FantasticPlugins) | $49 | 4,984 sales | 4.70/5 | Segmentation, manual mailing, multi-currency |
+| Abandoned Cart Lite (Tychesoftwares) | Free | 20,000+ | 4.1/5 | Webhooks in free tier, Action Scheduler |
+| CartBounty | Free | 10,000+ | 4.8/5 | Exit Intent free, anonymous cart capture, best hooks |
+
+**WDD Strategy:** Fire `wdd_cart_abandoned` / `wdd_cart_recovered` action hooks — any of these plugins can integrate.
+
+---
+
+### 1.6 Affiliate Management — Ecosystem Research
+
+| Plugin | Price | Sales | Rating | Scope |
+|---|---|---|---|---|
+| SUMO Affiliates for WooCommerce | $39 | 620 | 4.25/5 | WooCommerce-only |
+| SUMO Affiliates Pro | $49 | 954 | 4.53/5 | Any WordPress site, form/email commissions |
+
+**WDD Strategy:** Webhook bridge — fire events on `license_activated`, `order_completed`, `subscription_renewed` so affiliate plugins can consume commission data.
+
+---
+
+### 1.7 Free Subscription Billing Alternatives
+
+| Plugin | Price | Installs | Rating | Notable |
+|---|---|---|---|---|
+| Subscriptions for WooCommerce (WP Swings) | Free | 10,000+ | 4.4/5 | Subscription Box, AI widget, LearnPress |
+| Subscription & Recurring Payment (Convers Lab) | Free | 700+ | 4.9/5 | iDEAL/SEPA free, highest rated |
+| Subscriptions by Sublium (FunnelKit) | Free + 2.9% fee | 300+ | 5.0/5 | Variable products + installments free, FunnelKit ecosystem |
+
+**WDD Position:** WDD tracks subscription state and links it to license expiry / SaaS account status. For gateway-level recurring billing, WDD integrates with Stripe/PayPal via WooCommerce hooks. WDD does not compete with these engines.
+
+---
+
+### 1.8 License Key / Serial Number Managers — Direct Competitor
+
+**WC Serial Numbers (PluginEver):** https://wordpress.org/plugins/wc-serial-numbers/
+Free + Pro | 1,000+ installs | 4.7/5 | Updated May 2026
+
+Pre-generated key delivery: import keys via CSV/TXT, auto-deliver on order complete, HTTP API + REST API for validate/activate/deactivate, DB encryption, customer portal, HPOS + Blocks + WPML. Pro adds: key generator, variable products, bulk export, Twilio SMS.
+
+**WDD vs WC Serial Numbers:**
+| | WC Serial Numbers | woo-digital-downloads |
+|---|---|---|
+| Key generation | Import or Pro generator | Dynamic random_bytes() — no import needed |
+| Activation tracking | Basic API | Full domain+environment with staging exemption |
+| Update delivery | Not included | /wdd/v1/plugin/update-check |
+| ZIP versioning | Not included | Multi-channel, checksum, changelog |
+| SaaS provisioning | Not included | Full webhook-based |
+| Download tokens | Not included | Signed expiring tokens per order |
+| Geo-blocking | Not included | Country-level block list |
+
+---
+
+### 1.9 Payment Gateways — Reference
+
+**WooCommerce Stripe:** 700,000+ installs, free, 23 payment methods, Stripe Radar, Apple/Google Pay, BNPL. WDD hooks into Stripe-fired renewal events.
+
+**WooCommerce PayPal Payments:** 800,000+ installs, free, PayPal + Venmo + Pay Later + Fastlane + Apple/Google Pay + Crypto. WDD hooks into PayPal-fired order status events.
+
+---
+
+### 1.10 JWT Authentication — Library Research
+
+**jwt-auth (usefulteam):** 6,000 installs, 5.0/5, has refresh tokens + rotation. NOT updated in 2+ years — WP 7.x untested. Single-developer risk.
+
+**JWT Authentication for WP REST API (tmeister):** 60,000+ installs, 4.4/5, React admin dashboard, actively maintained. No refresh token in free tier — Pro required.
+
+**WDD Decision:** Use `firebase/php-jwt` directly in `includes/SaaS/JwtIssuer.php` — avoids namespace collisions, plugin conflicts, and external dependency risks. HS256, 10-min access tokens, 30-day refresh tokens stored server-side.
 
 ---
 
 ## 2. Competitor Feature Gap Analysis
 
-Based on all three platforms, here are the features they either miss or charge extra for — which your plugin can provide natively as a WooCommerce extension:
-
-### Features None of Them Handle Well Out-of-the-Box for WooCommerce:
-- Licensing + WooCommerce integration (native hooks)
-- Automatic plugin update delivery via WooCommerce order
+Features none of the competitors handle well for WooCommerce natively:
+- Licensing + WooCommerce native hooks integration
+- Automatic plugin update delivery tied to WooCommerce order
 - GitHub/Bitbucket private repo → auto ZIP build → update API
 - JWT-based SaaS account provisioning from WooCommerce checkout
 - Geo-blocking and IP logging on downloads
@@ -186,7 +218,7 @@ Based on all three platforms, here are the features they either miss or charge e
 ## 3. Project Architecture
 
 ### 3.1 Core Philosophy
-**WooCommerce handles:** Checkout, cart, orders, coupons, payment gateways, customer accounts.  
+**WooCommerce handles:** Checkout, cart, orders, coupons, payment gateways, customer accounts.
 **woo-digital-downloads handles:** Everything else — licensing, downloads, updates, SaaS, subscriptions, security, and analytics.
 
 ### 3.2 Module Structure
@@ -270,7 +302,7 @@ woo-digital-downloads/
 
 ## 4. Database Schema
 
-### Table: `wp_wdd_licenses`
+### wp_wdd_licenses
 ```sql
 CREATE TABLE wp_wdd_licenses (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -287,12 +319,11 @@ CREATE TABLE wp_wdd_licenses (
     updated_at      DATETIME NOT NULL,
     PRIMARY KEY (id),
     KEY idx_license_key (license_key),
-    KEY idx_user_id (user_id),
-    KEY idx_order_id (order_id)
+    KEY idx_user_id (user_id)
 );
 ```
 
-### Table: `wp_wdd_license_activations`
+### wp_wdd_license_activations
 ```sql
 CREATE TABLE wp_wdd_license_activations (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -308,7 +339,7 @@ CREATE TABLE wp_wdd_license_activations (
 );
 ```
 
-### Table: `wp_wdd_downloads`
+### wp_wdd_downloads
 ```sql
 CREATE TABLE wp_wdd_downloads (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -328,7 +359,7 @@ CREATE TABLE wp_wdd_downloads (
 );
 ```
 
-### Table: `wp_wdd_download_logs`
+### wp_wdd_download_logs
 ```sql
 CREATE TABLE wp_wdd_download_logs (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -341,7 +372,7 @@ CREATE TABLE wp_wdd_download_logs (
 );
 ```
 
-### Table: `wp_wdd_product_versions`
+### wp_wdd_product_versions
 ```sql
 CREATE TABLE wp_wdd_product_versions (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -360,7 +391,7 @@ CREATE TABLE wp_wdd_product_versions (
 );
 ```
 
-### Table: `wp_wdd_subscriptions`
+### wp_wdd_subscriptions
 ```sql
 CREATE TABLE wp_wdd_subscriptions (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -380,7 +411,7 @@ CREATE TABLE wp_wdd_subscriptions (
 );
 ```
 
-### Table: `wp_wdd_saas_accounts`
+### wp_wdd_saas_accounts
 ```sql
 CREATE TABLE wp_wdd_saas_accounts (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -398,9 +429,7 @@ CREATE TABLE wp_wdd_saas_accounts (
 
 ---
 
-## 5. Key API Endpoints
-
-All endpoints registered under `/wp-json/wdd/v1/`
+## 5. All endpoints registered under `/wp-json/wdd/v1/`
 
 ### License API
 ```
@@ -435,15 +464,12 @@ GET    /saas/usage/{api_key}     # Usage stats for a customer
 
 ## 6. WooCommerce Integration Points
 
-### Action Hooks Used
 ```php
-// Core order lifecycle
 add_action('woocommerce_order_status_completed',    [$this, 'on_order_complete']);
 add_action('woocommerce_order_status_refunded',     [$this, 'on_order_refunded']);
 add_action('woocommerce_subscription_status_active', [$this, 'on_subscription_active']);
 add_action('woocommerce_subscription_status_cancelled', [$this, 'on_subscription_cancelled']);
 add_action('woocommerce_subscription_renewal_payment_complete', [$this, 'on_renewal']);
-
 // Download access
 add_filter('woocommerce_customer_get_downloadable_products', [$this, 'get_downloads']);
 add_filter('woocommerce_downloadable_file_download_url',     [$this, 'secure_download_url']);
@@ -541,79 +567,62 @@ WooCommerce Order Completed
 |---|---|
 | Core platform | WordPress + WooCommerce |
 | Plugin language | PHP 8.1+ |
-| Admin UI | React + WordPress Scripts (Block Editor compatible) |
+| Admin UI | React + WordPress Scripts |
 | REST API | WordPress REST API framework |
-| Database | WordPress `$wpdb` + custom tables |
-| Background jobs | Action Scheduler (bundled with WooCommerce) |
-| Email | WordPress `wp_mail()` + HTML templates |
-| File serving | PHP stream (no direct file URL exposure) |
-| Token generation | `random_bytes()` + SHA-256 signing |
-| JWT | `firebase/php-jwt` or custom HMAC |
-| GitHub integration | GitHub Webhooks → PHP endpoint |
-| Geo-detection | MaxMind GeoLite2 (free) or ip-api.com |
-| Cron | WP-Cron + Action Scheduler for reliability |
+| Database | WordPress $wpdb + custom tables |
+| Background jobs | Action Scheduler |
+| Email | wp_mail() + HTML templates |
+| File serving | PHP stream (no direct URL) |
+| Token generation | random_bytes() + SHA-256 |
+| JWT | firebase/php-jwt (HS256) |
+| GitHub integration | GitHub Webhooks |
+| Geo-detection | MaxMind GeoLite2 or ip-api.com |
+| Cron | WP-Cron + Action Scheduler |
 
 ---
 
-## 9. What Makes woo-digital-downloads Different
+## 9. Differentiation Table
 
-| Capability | EDD | SureCart | FluentCart | woo-digital-downloads |
-|---|---|---|---|---|
-| WooCommerce native | No | No | No | **Yes** |
-| Self-hosted | Yes | No (managed) | Yes | **Yes** |
-| Licensing built-in | $199/yr add-on | Yes | Yes | **Yes** |
-| WP Plugin auto-update API | Yes (extension) | No | Partial | **Yes** |
-| GitHub → update sync | No | No | No | **Yes** |
-| SaaS provisioning via webhook | No | Partial | Partial | **Yes** |
-| Geo-blocking on downloads | No | No | No | **Yes** |
-| JWT for SaaS auth | No | No | No | **Yes** |
-| Staging/localhost exemption | Basic | No | No | **Yes** |
-| Remote kill-switch | Partial | No | No | **Yes** |
-| Extends WooCommerce (not replaces) | No | No | No | **Yes** |
-
-**Core value proposition:** Every other solution either replaces WooCommerce entirely or requires expensive add-ons. `woo-digital-downloads` is a WooCommerce extension — it plugs into the store you already have and adds everything needed to sell software, plugins, and SaaS products professionally.
-
----
-
-## 10. Mandatory Features Checklist
-
-### Must Have Before Launch
-- [x] Product Management (via WooCommerce)
-- [ ] License Generation & Management
-- [ ] Site Activation Limits (X sites / unlimited)
-- [ ] Staging & Localhost Exemption
-- [ ] Secure Download URLs (signed tokens + expiry)
-- [ ] Download Limits (max clicks per purchase)
-- [ ] Automatic Plugin Update API
-- [ ] SHA-256 Checksum on ZIPs
-- [ ] Subscription Tracking & Renewal
-- [ ] SaaS Account Provisioning
-- [ ] JWT / API Key Issuance
-- [ ] Customer Dashboard (licenses, downloads, API keys)
-- [ ] Email Automation (purchase, renewal reminder, expiry)
-- [ ] IP Logging on Downloads
-- [ ] Rate Limiting on License Endpoint
-- [ ] Activity Logs (admin side)
-
-### Should Have (Post-Launch v1.1)
-- [ ] Geo-Blocking
-- [ ] Abandoned Cart Recovery
-- [ ] GitHub/Bitbucket Auto-Update Sync
-- [ ] Dunning Management (failed payment retry)
-- [ ] Affiliate Connector Webhooks
-- [ ] Revenue Analytics Dashboard
-- [ ] Remote Kill-Switch
-- [ ] Rollback to Previous Version
+| Capability | EDD | SureCart | FluentCart | SUMO Subscriptions | WC Serial Numbers | woo-digital-downloads |
+|---|---|---|---|---|---|---|
+| WooCommerce native | No | No | No | Yes | Yes | **Yes** |
+| Self-hosted | Yes | No | Yes | Yes | Yes | **Yes** |
+| Licensing built-in | $199/yr | Yes | Yes | No | Yes (import) | **Yes (generated)** |
+| Plugin auto-update API | Yes (ext) | No | Partial | No | No | **Yes** |
+| GitHub update sync | No | No | No | No | No | **Yes** |
+| SaaS provisioning | No | Partial | Partial | No | No | **Yes** |
+| Geo-blocking | No | No | No | No | No | **Yes** |
+| JWT for SaaS auth | No | No | No | No | No | **Yes** |
+| Staging exemption | Basic | No | No | No | No | **Yes** |
+| Remote kill-switch | Partial | No | No | No | No | **Yes** |
+| Subscription billing | $209/yr | Yes | Yes | Yes ($49) | No | **Yes** |
+| Multi-site license | Yes | Yes | Yes | No | No | **Yes** |
+| Extends WooCommerce | No | No | No | Yes | Yes | **Yes** |
 
 ---
 
-## 11. References
+## 10. References
 
 - Easy Digital Downloads: https://easydigitaldownloads.com
-- SureCart Pricing: https://surecart.com/pricing
-- SureCart vs EDD: https://surecart.com/surecart-vs-easy-digital-downloads
-- FluentCart vs EDD: https://fluentcart.com/fluentcart-vs-edd
-- WooCommerce: https://woocommerce.com
-- Plugin Update Checker Library: https://github.com/YahnisElsts/plugin-update-checker
+- SureCart: https://surecart.com/pricing
+- FluentCart: https://fluentcart.com
+- SUMO Subscriptions: https://codecanyon.net/item/sumo-subscriptions-woocommerce-subscription-system/16486054
+- WC Recover Abandoned Cart: https://codecanyon.net/item/woocommerce-recover-abandoned-cart/7715167
+- Cart Abandonment Recovery (Brainstorm Force): https://wordpress.org/plugins/woo-cart-abandonment-recovery/
+- Abandoned Cart Lite: https://wordpress.org/plugins/woocommerce-abandoned-cart/
+- CartBounty: https://wordpress.org/plugins/woo-save-abandoned-carts/
+- SUMO Affiliates: https://codecanyon.net/item/sumo-affiliates-woocommerce-affiliate-system/18273930
+- SUMO Affiliates Pro: https://codecanyon.net/item/sumo-affiliates-pro-wordpress-affiliate-plugin/22795996
+- MWB HubSpot for WooCommerce: https://wordpress.org/plugins/makewebbetter-hubspot-for-woocommerce/
+- Subscriptions for WooCommerce (WP Swings): https://wordpress.org/plugins/subscriptions-for-woocommerce/
+- Subscription & Recurring Payment (Convers Lab): https://wordpress.org/plugins/subscription/
+- Subscriptions by Sublium: https://wordpress.org/plugins/sublium-subscriptions-for-woocommerce/
+- WC Serial Numbers: https://wordpress.org/plugins/wc-serial-numbers/
+- WooCommerce PayPal Payments: https://wordpress.org/plugins/woocommerce-paypal-payments/
+- WooCommerce Stripe Gateway: https://wordpress.org/plugins/woocommerce-gateway-stripe/
+- JWT Auth (usefulteam): https://wordpress.org/plugins/jwt-auth/
+- JWT Authentication for WP REST API: https://wordpress.org/plugins/jwt-authentication-for-wp-rest-api/
+- firebase/php-jwt: https://github.com/firebase/php-jwt
 - Action Scheduler: https://actionscheduler.org
 - MaxMind GeoLite2: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+- Plugin Update Checker: https://github.com/YahnisElsts/plugin-update-checker
