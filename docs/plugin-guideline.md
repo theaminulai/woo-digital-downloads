@@ -1340,6 +1340,32 @@ Always `'woo-digital-downloads'`. Never use a variable as the text domain.
 - Never translate strings that go into database or option values
 - Never use variable interpolation inside a translation string: `__( "Hello $name" )` — wrong. Use `sprintf( __( 'Hello %s', 'woo-digital-downloads' ), $name )` — correct
 - Use `_n()` for any string that depends on a count
+- **Never call `__()`, `_e()`, or any translation function inside a constructor.** WordPress 6.7+ requires the text domain to be loaded at `init` or later. A constructor that fires during `plugins_loaded` will trigger `_load_textdomain_just_in_time` too early and produce a notice. Return translated strings from methods instead:
+
+```php
+// WRONG — __() inside __construct() fires before the text domain is loaded
+public function __construct() {
+    $this->tab_label = __( 'My Licenses', 'woo-digital-downloads' );
+}
+
+// CORRECT — defer translated strings to a method called at/after init
+public function wdd_get_tab_label(): string {
+    return __( 'My Licenses', 'woo-digital-downloads' );
+}
+```
+
+- `load_plugin_textdomain()` must be hooked to `init`, not called directly during `plugins_loaded`:
+
+```php
+// In Plugin->init()
+add_action( 'init', function (): void {
+    load_plugin_textdomain(
+        'woo-digital-downloads',
+        false,
+        dirname( plugin_basename( WDD_PLUGIN_FILE ) ) . '/languages'
+    );
+} );
+```
 
 ---
 
@@ -1482,8 +1508,14 @@ final class Plugin {
     }
 
     private function init(): void {
-        // Load text domain
-        load_plugin_textdomain( 'woo-digital-downloads', false, dirname( plugin_basename( WDD_PLUGIN_FILE ) ) . '/languages' );
+        // Text domain — must hook to 'init', never called directly here (WP 6.7+)
+        add_action( 'init', static function (): void {
+            load_plugin_textdomain(
+                'woo-digital-downloads',
+                false,
+                dirname( plugin_basename( WDD_PLUGIN_FILE ) ) . '/languages'
+            );
+        } );
 
         // Core
         ( new Core\Assets() )->register();

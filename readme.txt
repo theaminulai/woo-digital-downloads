@@ -2,13 +2,13 @@
 Contributors: aminulislam
 Tags: woocommerce, digital downloads, software licensing, subscriptions, ebooks, pdf downloads, license keys, affiliates, abandoned cart, saas
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 7.0
 Stable tag: 1.0.0
 Requires PHP: 8.1
 WC requires at least: 8.0
 WC tested up to: 9.8
-License: GPLv2 or later
-License URI: https://www.gnu.org/licenses/gpl-2.0.html
+License: GPLv3 or later
+License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
 The complete digital product platform for WooCommerce. Sell eBooks, PDFs, courses, plugins, SaaS, and any digital file — with secure delivery, licensing, subscriptions, affiliates, and more.
 
@@ -199,22 +199,4 @@ Files are stored in a directory of your choosing (typically `wp-content/uploads/
 
 = 1.0.0 =
 * Initial release.
-* Secure Downloads: signed expiring tokens, IP and country logging, geo-blocking, file streaming for all digital file types.
-* Subscriptions: full recurring billing lifecycle, configurable dunning, proration, pause/resume, upgrade/downgrade.
-* Licensing: cryptographic key generation, domain activation tracking, staging exemption, remote kill-switch, REST API.
-* Plugin Updates: self-hosted update server, SHA-256 checksums, stable/beta channels, GitHub/Bitbucket import.
-* SaaS Provisioning: webhook-based account provisioning, API key management, JWT issuance.
-* Affiliates: complete affiliate program, commission engine, payout management, PayPal Mass Pay export.
-* Abandoned Cart Recovery: automatic email sequence, one-click restore, auto-generated coupons, recovery reporting.
-* Security: rate limiting, abuse detection, geo-blocking, checksum verification, HMAC-SHA256 webhook signatures.
-* Analytics: MRR/ARR/churn dashboard, license health, download statistics, CSV export.
-* Custom product types: wdd_plugin, wdd_saas, wdd_bundle.
-* Customer My Account tabs: Licenses, Downloads, API Keys.
-* Full REST API under /wp-json/wdd/v1/.
-* HPOS compatible.
-* Action Scheduler for all background jobs.
 
-== Upgrade Notice ==
-
-= 1.0.0 =
-Initial release. No upgrade steps required.

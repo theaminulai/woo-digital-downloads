@@ -40,6 +40,9 @@ No license key system is required. The module works with standard WooCommerce do
 | `DownloadDispatcher` | `includes/Downloads/DownloadDispatcher.php` | Rewrite URL, validate token, stream file |
 | `DownloadLogger` | `includes/Downloads/DownloadLogger.php` | Write IP, user-agent, country, timestamp log |
 | `GeoBlocker` | `includes/Downloads/GeoBlocker.php` | Country-level allow/block list |
+| `AdBlockDetector` | `includes/Downloads/AdBlockDetector.php` | Detect ad blocker and show inline notice (Phase 2) |
+| `VideoProtector` | `includes/Downloads/VideoProtector.php` | Signed URL streaming for video files via JS player (Phase 2) |
+| `MediaLibraryGuard` | `includes/Downloads/MediaLibraryGuard.php` | Protect WP media library files from direct URL access (Phase 2) |
 
 ### How the Token Flow Works
 
@@ -145,6 +148,10 @@ All stored in `wp_options`:
 | `wdd_geo_blocked_countries` | `[]` | Array of 2-letter ISO country codes |
 | `wdd_geo_detection_api` | `ip-api` | `ip-api` (free) or `maxmind` |
 | `wdd_maxmind_license_key` | `''` | MaxMind license key (if using GeoLite2) |
+| `wdd_adblock_detection_enabled` | `true` | Show notice when ad blocker detected on download page |
+| `wdd_video_protect_enabled` | `false` | Serve video files via JS player instead of direct download |
+| `wdd_media_library_guard_enabled` | `false` | Block direct URL access to protected uploads subfolder |
+| `wdd_protected_uploads_subdir` | `wdd-protected` | Subfolder under `wp-content/uploads/` for protected files |
 
 ---
 
@@ -206,6 +213,87 @@ The Downloads tab (`/my-account/wdd-downloads/`) shows:
 
 ---
 
+## Ad Blocker Detection (Phase 2)
+
+Inspired by WPDM. When a customer is on the Downloads tab and an ad blocker is detected, a non-intrusive notice is shown explaining that their ad blocker may interfere with download tracking.
+
+**Detection method:** inject a small script that attempts to load a fake `/wp-content/plugins/woo-digital-downloads/assets/js/ads.js` resource. Ad blockers block resources with `ads` in the path. If the request fails, the JS fires a notice.
+
+```javascript
+// assets/js/wdd-adblock-detect.js
+const probe = new Image();
+probe.src = wddDownloads.adProbeUrl; // .../assets/images/ad.gif
+probe.onerror = () => {
+    document.querySelector('.wdd-adblock-notice')?.classList.remove('wdd-hidden');
+};
+```
+
+**Notice copy (translatable):** "We detected an ad blocker. If your download doesn't start automatically, please disable your ad blocker for this site and try again."
+
+Configurable: `wdd_adblock_detection_enabled` (bool, default `true`).
+
+---
+
+## Video Play-Protect (Phase 2)
+
+For video file downloads (`.mp4`, `.webm`, `.mov`), WDD can serve the video through a JS-based player instead of triggering a browser download. The player uses a short-lived signed token so the video URL cannot be hotlinked.
+
+```
+Customer clicks "Watch" → player overlay opens
+    │
+    └── JS requests: GET /wdd/v1/video-token/{download_token}
+            ├── Validates download token (same rules as file download)
+            ├── Issues a separate short-lived video stream token (10-min TTL)
+            └── Returns { stream_url: "/wdd-stream/{video_token}" }
+
+JS player (Video.js or HTML5 native) loads stream_url.
+/wdd-stream/{video_token} → VideoProtector::stream()
+    ├── Validates video_token (10-min expiry, single-use optional)
+    ├── Reads file via readfile() in chunks
+    └── Supports HTTP Range requests for scrubbing
+```
+
+Per-product toggle: `_wdd_video_protect` (bool). When off, video files are served as normal downloads.
+
+---
+
+## Media Library Protection (Phase 2)
+
+By default, files uploaded to the WordPress Media Library are publicly accessible via direct URL (`/wp-content/uploads/...`). `MediaLibraryGuard` can block direct access to protected uploads and route them through WDD token validation.
+
+**Scope:** Only files attached to WDD-protected products are blocked. Other media files remain publicly accessible.
+
+**Implementation options (admin can choose):**
+1. `.htaccess` rule (Apache): `Deny from all` on `wp-content/uploads/wdd-protected/` subfolder
+2. Nginx config snippet (displayed in admin for manual paste)
+3. PHP intercept via `template_redirect` (slowest but requires no server config)
+
+Files for protected products should be uploaded to a separate "Protected Files" section in WDD admin, not via the standard Media Library uploader, to keep them in the protected subfolder.
+
+---
+
+## Admin UI — Color Scheme Toggle (Phase 2)
+
+Inspired by WPDM. The WDD admin panel supports three color schemes selectable per-user:
+
+| Mode | Description |
+|---|---|
+| Light | Default WP-compatible light scheme |
+| Dark | Full dark mode for WDD admin pages only (does not affect WP core) |
+| System | Follows OS `prefers-color-scheme` media query automatically |
+
+Implemented via a CSS custom property set on `<body class="wdd-admin">`:
+
+```css
+/* assets/css/wdd-admin.css */
+body.wdd-admin[data-scheme="dark"]  { --wdd-bg: #1a1a2e; --wdd-text: #e0e0e0; ... }
+body.wdd-admin[data-scheme="light"] { --wdd-bg: #ffffff; --wdd-text: #1a1a1a; ... }
+```
+
+Preference stored in user meta: `_wdd_admin_color_scheme` (`light` | `dark` | `system`). The JS reads it on page load and sets `data-scheme` on `<body>`.
+
+---
+
 ## Developer Hooks
 
 ```php
@@ -230,13 +318,17 @@ do_action( 'wdd_download_rejected', $token_id, $reason, $ip );
 
 ## Competitive Context
 
-| | WooCommerce Native | EDD Core | woo-digital-downloads |
-|---|---|---|---|
-| Signed expiring tokens | Partial (nonce-based) | Yes | **Yes (64-char hex)** |
-| IP logging per download | No | Yes | **Yes** |
-| Geo-blocking | No | No | **Yes** |
-| Country detection | No | No | **Yes (ip-api/MaxMind)** |
-| Count limit enforcement | WC setting only | Yes | **Yes (server-side)** |
-| Direct URL exposure | Yes (if WC setting off) | No | **Never** |
-| Customer download portal | Basic | Yes | **Yes (My Account tab)** |
-| Works with existing WC products | Native | No (EDD products) | **Yes** |
+| | WooCommerce Native | EDD Core | WPDM + Premium Packages | woo-digital-downloads |
+|---|---|---|---|---|
+| Signed expiring tokens | Partial (nonce-based) | Yes | No (direct URL) | **Yes (64-char hex)** |
+| IP logging per download | No | Yes | Yes | **Yes** |
+| Geo-blocking | No | No | No | **Yes** |
+| Country detection | No | No | No | **Yes (ip-api/MaxMind)** |
+| Count limit enforcement | WC setting only | Yes | Yes | **Yes (server-side)** |
+| Direct URL exposure | Yes (if WC setting off) | No | Yes | **Never** |
+| Customer download portal | Basic | Yes | Yes (standalone, not WC) | **Yes (My Account tab)** |
+| Ad blocker detection | No | No | Yes | **Yes (Phase 2)** |
+| Video play-protect | No | No | Yes | **Yes (Phase 2)** |
+| Media library protection | No | No | Yes | **Yes (Phase 2)** |
+| Admin dark mode | No | No | Yes | **Yes (Phase 2)** |
+| Works with existing WC products | Native | No (EDD products) | Standalone only | **Yes** |

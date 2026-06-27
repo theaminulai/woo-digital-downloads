@@ -245,7 +245,228 @@ Pre-generated key delivery: import keys via CSV/TXT, auto-deliver on order compl
 
 ---
 
-### 1.9 Payment Gateways — Reference
+### 1.9 Download Manager (WPDM) + Premium Packages
+
+**Download Manager:** https://wordpress.org/plugins/download-manager/
+Free + Pro | 100,000+ installs | 4.1/5 | Updated June 2026 (v3.3.58)
+
+**Premium Packages (WPDM add-on):** https://wordpress.org/plugins/wpdm-premium-packages/
+Free | 3,000+ installs | 3.8/5 | Updated Jan 2026 (v6.2.0)
+
+WPDM is a standalone file management and digital store system — it is NOT a WooCommerce extension. It runs its own cart, checkout, and PayPal integration. Premium Packages is a free add-on that adds ecommerce to WPDM.
+
+**What WPDM does well (features to study):**
+- Ad blocker detection with custom message and download link disable
+- Video file protection: allow play but block download
+- Media library file protection
+- Integrated document viewer (DOC, PDF, PowerPoint) — Microsoft Office preview API
+- Server file browser + asset manager with version management (Pro)
+- Color scheme (System/Light/Dark) with dark mode support
+- Chunk upload to override HTTP max upload limit
+- Category-level access control
+- Download speed control
+- IP block list for bot prevention
+- CBC bit-flipping attack protection on Crypt class (fixed v3.3.41)
+- Free Google Drive, Dropbox, Box.com, OneDrive adapters (15–10 GB free)
+
+**What Premium Packages does well (features to study):**
+- Mini cart widget in 3 styles: dropdown, slide panel, floating button — with nav menu integration
+- `[wpdmpp_pay_link]` shortcode: accept payment without creating a product (dynamic product)
+- "Pay What You Want" pricing with minimum floor
+- License-based price tiers: Personal / Extended / Unlimited per product
+- Order expiration (e.g., 1-year support access, then renewal prompt)
+- Abandoned cart recovery: up to 5 follow-up emails with dynamic coupon codes
+- Email cart to someone else / save cart for later
+- Sell extra services (gigs) as add-ons at checkout
+- 2-click checkout — simplest possible checkout for digital goods
+- Manual order creation from admin
+
+**WPDM Weaknesses / WDD Opportunity:**
+- Not WooCommerce native — merchants must maintain a second commerce system
+- Critical review: "People end up downloading content for FREE" — delivery security gap
+- No staging/local environment exemption for licenses
+- PayPal only (Stripe requires paid add-on)
+- No SaaS provisioning, no JWT, no GitHub sync
+- No WooCommerce HPOS compatibility by definition
+
+**WDD Decisions from WPDM Research:**
+- Adopt ad blocker detection feature for Downloads module
+- Adopt "play but don't download" for video files
+- Adopt dark/light/system color scheme toggle in admin UI
+- Adopt dynamic payment link concept as a WooCommerce quick-buy mechanism
+- Adopt 2-click checkout concept via Digital Goods Checkout integration (§1.11)
+- Adopt order expiration as a WDD entitlement feature (already planned)
+
+---
+
+### 1.10 Digital License Manager (DLM)
+
+**URL:** https://wordpress.org/plugins/digital-license-manager/
+Free + Pro | 700+ installs | 4.7/5 | Updated Feb 2026 (v1.8.4) | By CodeVerve
+
+DLM is a WooCommerce extension for selling and managing license keys. It is the closest free direct competitor to WDD's Licensing module.
+
+**DLM Free — what it covers:**
+- Licenses table with search, filter, edit
+- Activations table — each activation as a DB row (not a counter): stores IP, user-agent, label, environment
+- License Generators — configure key format/length/character sets
+- Deliver from stock (pre-generated) OR from Generator (dynamic) per product
+- Stock sync: product stock count = available license count in DB
+- Simple and Variable product support
+- Configurable delivery order status
+- My Account: licenses list + single license page with activation log
+- Manual activation from My Account (customer can activate without API call)
+- PDF License Certificate download
+- License key in order confirmation email + re-send from admin
+- REST API: Licenses, Generators, Software CRUD + auth by API Key
+- CSV import/export with duplicate check
+- HPOS compatible
+- Gutenberg blocks: Licenses Table + License Check Form
+- Shortcodes for the above
+- Refund handling with configurable behavior (added v1.7.1)
+- Per-item `_dlm_license_id` order meta for developer access
+- Migration tool from "License Manager for WooCommerce"
+- Client libraries: PHP, C++, C#, Python
+- Uses `defuse/PHP-Encryption` — stores key files in `wp-content/uploads/dlm-files`
+- Removed jQuery entirely — uses Tom-Select + Flatpickr
+
+**DLM Pro — what requires paid upgrade:**
+- WooCommerce Subscriptions integration (sync license expiry to sub status)
+- Software Releases (publish releases per software, gallery, changelog)
+- Software Download page in My Account
+- Software Download REST API endpoint
+- WordPress plugin/theme auto-updater
+- WPML support
+- License Revealing (blur key until customer clicks)
+
+**WDD vs DLM:**
+| Feature | DLM | woo-digital-downloads |
+|---|---|---|
+| Key generation | Generator (configurable format) | `random_bytes()` — cryptographically secure |
+| Activation tracking | DB row per activation with IP/UA/label | Same + environment (staging/local) + geo |
+| Staging exemption | No | Yes — auto-exempt staging/local from limits |
+| Remote kill-switch | Suspend via admin | Instant REST revocation |
+| Plugin update API | Pro only | Built-in (Phase 1) |
+| GitHub sync | No | Yes (Phase 4) |
+| SaaS provisioning | No | Yes (Phase 2) |
+| Subscription sync | Pro (needs WC Subscriptions extension) | Built-in subscription engine |
+| PDF certificate | Yes (free) | Not planned initially |
+| Client libraries | PHP, C++, C#, Python | PHP only (v1), expand later |
+| Encryption | defuse/PHP-Encryption | Encrypt in DB + rotating keys |
+| Works without WooCommerce | Yes | No — WooCommerce extension only |
+
+**WDD Decisions from DLM Research:**
+- **PDF License Certificate** is a meaningful feature — add to roadmap (Phase 3 or later, use `spipu/html2pdf`)
+- **Manual activation from My Account** — let customers activate without API. Add to My Account license tab.
+- **License Revealing** (blur key, click to reveal) — good UX. Adopt in My Account.
+- **Copy to clipboard** button on license key display — adopt everywhere
+- **Per-item `_wdd_license_id` order meta** — already planned; confirm it matches DLM pattern
+- **Migration tool** — build a DLM → WDD migration tool for v1.1
+- **Tom-Select instead of Select2** — confirm WDD admin also avoids jQuery for dropdowns
+- Encryption: store encrypted in DB, key file in `wp-content/uploads/wdd-keys/` — document backup requirement
+
+---
+
+### 1.11 Digital Goods Checkout for WooCommerce
+
+**URL:** https://wordpress.org/plugins/woo-checkout-for-digital-goods/
+Free + Pro | 3,000+ installs | 4.5/5 | Updated May 2026 (v3.8.4) | By Dotstore
+
+A focused WooCommerce plugin that removes unnecessary billing/shipping fields from checkout when the cart contains only virtual/downloadable products.
+
+**What it does:**
+- Removes: company, last name, address lines, city, state, postcode, phone, country
+- Optional: remove order notes field
+- Quick checkout button on shop page and product page
+- Mixed cart aware: only activates when ALL products are digital
+- HPOS compatible, Blocks compatible
+- 41 reviews, 4.5/5 stars — "works exactly as needed"
+
+**Pro features:**
+- Apply to specific categories/tags only
+- Delayed account creation (after payment)
+- Post-payment additional fields
+- User role restrictions
+
+**Known issue:** Conflict with FluentCRM SMTP driver (one user report).
+
+**WDD Decision:**
+WDD should build this behavior directly into its checkout module rather than requiring a separate plugin. The existing §6.6 Checkout Optimization covers this. Specifically:
+- `woocommerce_checkout_fields` filter to remove address fields when cart is digital-only
+- Quick checkout button: a `[wdd_quick_checkout]` shortcode option
+- The Pro's "delayed account creation" pattern is useful for WDD's "optional account creation" UX goal
+- Document the FluentCRM SMTP incompatibility pattern — avoid hooking `wp_mail` filters
+
+---
+
+### 1.12 ArraySubs — Subscriptions + Membership
+
+**URL:** https://wordpress.org/plugins/arraysubs/
+Free | 80+ installs | No reviews yet (launched March 2026) | By Emran
+
+ArraySubs is a comprehensive free WooCommerce subscription + membership plugin. It is the most feature-complete free alternative to WooCommerce Subscriptions discovered in WDD research.
+
+**What's free (complete list of notable features):**
+- Subscription products: simple + variable, per-variation configuration
+- Billing: daily, weekly, monthly, yearly, custom day intervals, lifetime
+- Free trials with one-trial-per-customer enforcement
+- Sign-up fees + different renewal pricing after N cycles (stepped)
+- Renewal sync: align all renewals to a shared calendar date
+- 2-phase grace periods: Active grace (default 3 days) → On-Hold grace (7 days) → Cancellation
+- Skip next renewal (configurable max skips + cutoff)
+- Pause/vacation mode (configurable duration + cooldown + auto-resume)
+- Plan switching: upgrades, downgrades, crossgrades — 3 proration methods
+- **Retention flow builder**: cancellation reasons → 4 offer types (discount, pause, downgrade, contact support) → confirm
+- **Retention analytics**: 8 KPI cards, churn reasons chart, offer distribution, trend chart, activity logs
+- Customer portal: full self-service in WooCommerce My Account
+- Member access control: 6 rule types, 9 condition types, 12 operators, nested AND/OR
+- Role mapping: assign WP roles based on subscription status (7 status behaviors)
+- Member-only discounts (percentage/fixed, per-product or per-cart)
+- Members-only commerce: hide/block products for non-members
+- Content restriction + URL restriction + download restriction (signed URLs)
+- 16 email notifications (13 customer + 3 admin) with 50+ placeholders
+- Refund management: 3 policies, prorated refunds with preview
+- 9-step setup wizard with 7 business type profiles
+- Settings export/import (JSON, section-level)
+- Custom profile fields + avatar upload
+- My Account editor (drag-drop menu reorder, custom endpoints)
+- Login as User (admin impersonation, 6 entry points, nested sessions)
+- HPOS compatible, Block checkout compatible
+- CSV/JSON subscription export
+
+**WDD vs ArraySubs:**
+| Feature | ArraySubs | woo-digital-downloads |
+|---|---|---|
+| Subscription engine | Full built-in | Full built-in (planned) |
+| Retention flow | 4 offer types + analytics | Not planned (Phase 5+) |
+| Member access control | 6 rule types | Not in scope |
+| Content restriction | Yes (posts, pages, CPT) | Not in scope |
+| URL restriction | Yes | Not in scope |
+| Download restriction | Signed URLs | Full token + IP + geo |
+| License keys | No | Yes (Phase 1) |
+| Plugin update API | No | Yes (Phase 1) |
+| SaaS provisioning | No | Yes (Phase 2) |
+| GitHub sync | No | Yes (Phase 4) |
+| Geo-blocking | No | Yes (Phase 3) |
+| JWT for SaaS auth | No | Yes (Phase 2) |
+| Focuses on WooCommerce | Yes | Yes |
+
+**WDD Decisions from ArraySubs Research:**
+- **Retention flow** (cancellation reason → offer → confirm) is a high-value subscription feature. Add to Subscriptions module roadmap (Phase 2 extension).
+- **2-phase grace period** (active grace → on-hold → cancel) is the right pattern. Adopt for WDD dunning: `_wdd_sub_active_grace_days` + `_wdd_sub_onhold_grace_days` settings.
+- **Skip next renewal** — add to customer My Account portal for WDD subscriptions.
+- **Pause/vacation mode** — add with configurable max duration and cooldown.
+- **Plan switching with 3 proration methods** — adopt: Prorate Immediately / Apply at Renewal / No Proration.
+- **Renewal sync** (align all renewals to a fixed calendar date) — useful for subscription box scenario. Add to WDD Subscriptions.
+- **Login as User** — add to WDD admin tools (helps support staff debug customer issues).
+- **One-trial-per-customer enforcement** — prevent trial abuse. Add `_wdd_trial_used` user meta check.
+- **Stepped renewal pricing** (different price after N cycles) — store as `_wdd_sub_step_price` + `_wdd_sub_step_after` product meta.
+- ArraySubs' download restriction uses signed URLs — confirms WDD's token approach is correct.
+- ArraySubs' role mapping (assign WP roles on subscription status) — add as optional WDD feature.
+
+---
+
+### 1.13 Payment Gateways — Reference
 
 **WooCommerce Stripe:** 700,000+ installs, free, 23 payment methods, Stripe Radar, Apple/Google Pay, BNPL. WDD hooks into Stripe-fired renewal events.
 
@@ -253,7 +474,7 @@ Pre-generated key delivery: import keys via CSV/TXT, auto-deliver on order compl
 
 ---
 
-### 1.10 JWT Authentication — Library Research
+### 1.14 JWT Authentication — Library Research
 
 **jwt-auth (usefulteam):** 6,000 installs, 5.0/5, has refresh tokens + rotation. NOT updated in 2+ years — WP 7.x untested. Single-developer risk.
 
@@ -265,15 +486,27 @@ Pre-generated key delivery: import keys via CSV/TXT, auto-deliver on order compl
 
 ## 2. Competitor Feature Gap Analysis
 
-Features none of the competitors handle well for WooCommerce natively:
-- Licensing + WooCommerce native hooks integration
-- Automatic plugin update delivery tied to WooCommerce order
-- GitHub/Bitbucket private repo → auto ZIP build → update API
-- JWT-based SaaS account provisioning from WooCommerce checkout
-- Geo-blocking and IP logging on downloads
-- Remote license kill-switch
-- Staging/localhost exemption for site-limit licenses
-- WooCommerce webhook → SaaS account creation flow
+**Features none of the researched competitors handle for WooCommerce natively:**
+- Automatic plugin update delivery tied to WooCommerce order (DLM Pro only)
+- GitHub/Bitbucket private repo → auto ZIP build → update API (no competitor)
+- JWT-based SaaS account provisioning from WooCommerce checkout (no competitor)
+- Geo-blocking on file downloads (no competitor)
+- Remote license kill-switch (no competitor)
+- Staging/localhost exemption for site-limit licenses (no competitor)
+- WooCommerce order → SaaS account creation webhook flow (no competitor)
+
+**Features competitors do have that WDD should match or exceed:**
+- PDF license certificate (DLM free) → WDD roadmap Phase 3
+- Manual license activation from My Account (DLM free) → WDD My Account tab
+- License key "copy to clipboard" (DLM free) → WDD My Account + order page
+- 2-click / quick checkout for digital-only carts (Digital Goods Checkout) → WDD checkout module
+- Ad blocker detection on download page (WPDM) → WDD Downloads module
+- Video play-but-no-download protection (WPDM) → WDD Downloads module
+- Retention flow builder on subscription cancellation (ArraySubs free) → WDD Subscriptions Phase 2
+- 2-phase grace period on subscription payment failure (ArraySubs) → WDD dunning engine
+- Skip next renewal + pause/vacation mode (ArraySubs free) → WDD customer portal
+- Stepped renewal pricing after N cycles (ArraySubs free) → WDD subscription product config
+- Dark/light/system color scheme toggle in admin (WPDM) → WDD admin panel
 
 ---
 
@@ -645,21 +878,29 @@ WooCommerce Order Completed
 
 ## 9. Differentiation Table
 
-| Capability | EDD | SureCart | FluentCart | SUMO Subscriptions | WC Serial Numbers | woo-digital-downloads |
-|---|---|---|---|---|---|---|
-| WooCommerce native | No | No | No | Yes | Yes | **Yes** |
-| Self-hosted | Yes | No | Yes | Yes | Yes | **Yes** |
-| Licensing built-in | $199/yr | Yes | Yes | No | Yes (import) | **Yes (generated)** |
-| Plugin auto-update API | Yes (ext) | No | Partial | No | No | **Yes** |
-| GitHub update sync | No | No | No | No | No | **Yes** |
-| SaaS provisioning | No | Partial | Partial | No | No | **Yes** |
-| Geo-blocking | No | No | No | No | No | **Yes** |
-| JWT for SaaS auth | No | No | No | No | No | **Yes** |
-| Staging exemption | Basic | No | No | No | No | **Yes** |
-| Remote kill-switch | Partial | No | No | No | No | **Yes** |
-| Subscription billing | $209/yr | Yes | Yes | Yes ($49) | No | **Yes** |
-| Multi-site license | Yes | Yes | Yes | No | No | **Yes** |
-| Extends WooCommerce | No | No | No | Yes | Yes | **Yes** |
+| Capability | EDD | SureCart | FluentCart | SUMO Subs | WC Serial Numbers | WPDM+PP | DLM | ArraySubs | woo-digital-downloads |
+|---|---|---|---|---|---|---|---|---|---|
+| WooCommerce native | No | No | No | Yes | Yes | No | Yes | Yes | **Yes** |
+| Self-hosted | Yes | No | Yes | Yes | Yes | Yes | Yes | Yes | **Yes** |
+| Licensing built-in | $199/yr | Yes | Yes | No | Yes (import) | Basic | Yes (free) | No | **Yes (generated)** |
+| Plugin auto-update API | Yes (ext) | No | Partial | No | No | No | Pro only | No | **Yes** |
+| GitHub update sync | No | No | No | No | No | No | No | No | **Yes** |
+| SaaS provisioning | No | Partial | Partial | No | No | No | No | No | **Yes** |
+| Geo-blocking | No | No | No | No | No | No | No | No | **Yes** |
+| JWT for SaaS auth | No | No | No | No | No | No | No | No | **Yes** |
+| Staging exemption | Basic | No | No | No | No | No | No | No | **Yes** |
+| Remote kill-switch | Partial | No | No | No | No | No | No | No | **Yes** |
+| Subscription billing | $209/yr | Yes | Yes | Yes ($49) | No | PayPal only | Pro sync | Yes (free) | **Yes** |
+| Retention flow | No | No | No | No | No | No | No | Yes (free) | **Roadmap P2** |
+| 2-phase grace period | No | No | No | Yes | No | No | No | Yes (free) | **Yes** |
+| Skip/pause subscription | No | No | No | Pause only | No | No | No | Yes (free) | **Yes** |
+| PDF license certificate | No | No | No | No | No | No | Yes (free) | No | **Roadmap P3** |
+| Manual My Account activation | No | No | No | No | No | No | Yes (free) | No | **Yes** |
+| Ad blocker detection | No | No | No | No | No | Yes | No | No | **Yes** |
+| Video play-protect | No | No | No | No | No | Yes | No | No | **Yes** |
+| Quick digital checkout | No | No | No | No | No | 2-click | No | No | **Yes (built-in)** |
+| Multi-site license | Yes | Yes | Yes | No | No | No | No | No | **Yes** |
+| Extends WooCommerce | No | No | No | Yes | Yes | No | Yes | Yes | **Yes** |
 
 ---
 

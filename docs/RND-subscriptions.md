@@ -57,12 +57,13 @@ With **SaaS** enabled: suspension automatically suspends the SaaS account.
 | Feature | Description |
 |---|---|
 | My Account subscriptions tab | Customer views all active/past subscriptions |
-| Pause subscription | Customer can pause; billing suspended, access maintained during pause |
-| Resume subscription | Resume from paused state; next billing on resume date |
-| Cancel subscription | Customer cancels; access continues to period end (grace period) |
+| Pause subscription | Customer can pause (vacation mode); billing suspended, access maintained during pause; next_payment_at advances by pause duration on resume |
+| Resume subscription | Resume from paused state; next billing recalculated from resume date |
+| Skip next renewal | Customer skips one upcoming renewal; next_payment_at jumps one interval; license/SaaS access extends to cover the skipped cycle |
+| Cancel subscription | Customer cancels; cancellation flow triggers retention steps before confirming; access continues to period end |
 | Change payment method | Customer updates card/PayPal for future renewals |
-| Upgrade plan | Switch to higher-tier product; proration applied or full price charged |
-| Downgrade plan | Switch to lower-tier product; change effective next cycle |
+| Upgrade plan | Switch to higher-tier product; 3 proration modes: Prorate Immediately, Apply at Renewal, No Proration |
+| Downgrade plan | Switch to lower-tier product; 3 proration modes; effective immediately or next cycle depending on mode |
 | Resubscribe | Re-activate a cancelled or expired subscription |
 | Update quantity | Change subscription quantity (if product allows) |
 | View renewal history | Full log of payments, status changes, retries |
@@ -110,14 +111,23 @@ All emails use WooCommerce's HTML email infrastructure. Templates overridable in
 | Email | Trigger | Customizable |
 |---|---|---|
 | Subscription created | Order completed with subscription product | Yes |
-| Renewal reminder | N days before renewal (configurable) | Yes |
+| Trial started | Subscription enters trialing status | Yes |
+| Trial ending soon | N days before trial ends (configurable) | Yes |
+| Trial converted | Trial period ends, first billing collected | Yes |
+| Renewal reminder | N days before renewal (configurable; multiple reminders) | Yes |
 | Renewal successful | Payment captured successfully | Yes |
 | Payment failed | Auto-renewal charge fails | Yes |
-| Overdue notice | Payment still outstanding after X days | Yes |
-| Suspend notice | Subscription suspended after overdue period | Yes |
+| Payment retry scheduled | Dunning retry queued | Yes |
+| Overdue notice | Payment still outstanding — active grace period | Yes |
+| Suspend notice | Subscription suspended after active grace days | Yes |
+| Suspended grace ending | N days before hard cancel during suspended grace | Yes |
 | Cancellation notice | Customer or admin cancels | Yes |
 | Expiration notice | Fixed-length subscription reaches end | Yes |
 | Resubscription confirmed | Customer resubscribes | Yes |
+| Plan changed | Upgrade or downgrade applied | Yes |
+| Skip renewal confirmed | Customer skips next billing cycle | Yes |
+
+All email templates support 50+ placeholders: `{first_name}`, `{subscription_id}`, `{product_name}`, `{amount}`, `{next_payment_date}`, `{trial_end_date}`, `{cancel_date}`, `{license_key}`, `{plan_name}`, and more. Templates are overridable in `your-theme/woocommerce/emails/`.
 
 Multiple pre-renewal reminders can be configured (e.g., 7 days before, 3 days before, 1 day before).
 
@@ -143,11 +153,14 @@ Multiple pre-renewal reminders can be configured (e.g., 7 days before, 3 days be
 | Class | File | Responsibility |
 |---|---|---|
 | `SubscriptionProduct` | `includes/Subscriptions/SubscriptionProduct.php` | Register product type, meta boxes, pricing display |
-| `SubscriptionManager` | `includes/Subscriptions/SubscriptionManager.php` | Create, renew, pause, cancel, resubscribe |
-| `RenewalEngine` | `includes/Subscriptions/RenewalEngine.php` | Action Scheduler jobs for auto-renewal |
-| `DunningManager` | `includes/Subscriptions/DunningManager.php` | Failed payment retry sequence + emails |
-| `PlanUpgrade` | `includes/Subscriptions/PlanUpgrade.php` | Proration, upgrade/downgrade logic |
-| `SubscriptionEmail` | `includes/Subscriptions/SubscriptionEmail.php` | All subscription-specific email classes |
+| `SubscriptionManager` | `includes/Subscriptions/SubscriptionManager.php` | Create, renew, pause, cancel, skip, resubscribe |
+| `RenewalEngine` | `includes/Subscriptions/RenewalEngine.php` | Action Scheduler jobs for auto-renewal + stepped pricing |
+| `DunningManager` | `includes/Subscriptions/DunningManager.php` | 2-phase failed payment retry sequence + emails |
+| `PlanUpgrade` | `includes/Subscriptions/PlanUpgrade.php` | 3-mode proration, upgrade/downgrade logic |
+| `RetentionFlow` | `includes/Subscriptions/RetentionFlow.php` | Cancellation reason + retention offer flow |
+| `RenewalSync` | `includes/Subscriptions/RenewalSync.php` | Calendar-date alignment for first partial payment |
+| `RoleManager` | `includes/Subscriptions/RoleManager.php` | WP role assignment on status transitions |
+| `SubscriptionEmail` | `includes/Subscriptions/SubscriptionEmail.php` | All 16 subscription-specific email classes |
 | `SubscriptionReport` | `includes/Subscriptions/SubscriptionReport.php` | Admin reports and CSV export |
 | `SubscriptionListTable` | `includes/Admin/SubscriptionListTable.php` | WP_List_Table implementation |
 
@@ -184,15 +197,23 @@ Renewal Due (Action Scheduler fires)
             │       └── Schedule next renewal
             └── [Failure] → DunningManager::on_payment_failed(subscription_id)
 
-Payment Failed (Dunning Sequence — via Action Scheduler)
+Payment Failed (Dunning Sequence — 2-phase grace via Action Scheduler)
     │
-    ├── Day 0:  Status → 'past_due'. Send "Payment failed" email.
-    ├── Day N:  Retry charge. On success → back to Active flow above.
-    │           On failure → send overdue reminder.
-    ├── Day X:  Status → 'suspended'. Suspend license / SaaS account.
-    │           Send "Access suspended" email.
-    └── Day Y:  Status → 'cancelled'. Final cancellation email.
-                [If Licensing] License remains until expires_at (grace) or revoked.
+    ├── Day 0:   Status → 'past_due'. Send "Payment failed" email.
+    │            License / SaaS access REMAINS ACTIVE (active grace phase).
+    ├── Day N:   Retry charge (configurable retry intervals e.g. [1,3,5]).
+    │            On success → back to Active flow above.
+    │            On failure → send overdue reminder email.
+    ├── Day X:   Active grace days exhausted (wdd_sub_active_grace_days, default 7).
+    │            Status → 'suspended'. License suspended. SaaS suspended.
+    │            Send "Access suspended" email.
+    │            — Suspended grace phase begins —
+    ├── Day X+N: Retry charges continue during suspended grace.
+    │            On success → reactivate: Status → 'active'. Restore license/SaaS.
+    │            Send "Suspended grace ending soon" email when N days remain.
+    └── Day X+Y: Suspended grace days exhausted (wdd_sub_suspended_grace_days, default 7).
+                 Status → 'cancelled'. Final cancellation email.
+                 [If Licensing] License stays until expires_at then expires naturally (no forced revoke).
 
 Customer Pauses Subscription
     │
@@ -253,7 +274,15 @@ Customer upgrades from Plan A ($49/mo) to Plan B ($99/mo)
 Downgrade: same logic, issue store credit for the difference instead of charging
 ```
 
-Proration mode is configurable: **Prorate** (charge/credit difference) or **Next cycle** (switch takes effect at next renewal, no charge today).
+Three proration modes are configurable per product (`_wdd_sub_proration`) and globally (`wdd_sub_proration_mode`):
+
+| Mode | Behaviour |
+|---|---|
+| `prorate_immediately` | Calculate unused credit + charge/refund difference immediately. Reset cycle from today. |
+| `apply_at_renewal` | No charge today. New price takes effect at next renewal. Cycle date unchanged. |
+| `no_proration` | Switch product immediately. Customer pays new full price at next renewal. No credit issued. |
+
+Default: `apply_at_renewal`.
 
 ---
 
@@ -338,7 +367,9 @@ CREATE TABLE {prefix}wdd_subscription_logs (
 | `_wdd_sub_length` | int | Max subscription length (0 = indefinite) |
 | `_wdd_sub_length_period` | string | `month`, `year` |
 | `_wdd_sub_limit` | int | Max active subscriptions per customer (0 = unlimited) |
-| `_wdd_sub_proration` | string | `prorated` or `next_cycle` |
+| `_wdd_sub_proration` | string | `prorate_immediately`, `apply_at_renewal`, or `no_proration` |
+| `_wdd_sub_step_price` | decimal | Stepped renewal price after N cycles (0 = disabled) |
+| `_wdd_sub_step_after` | int | Number of billing cycles before stepped price takes effect |
 | `_wdd_sub_include_shipping` | bool | Include shipping in renewal orders |
 | `_wdd_sub_include_tax` | bool | Include tax in renewal orders |
 
@@ -351,15 +382,123 @@ CREATE TABLE {prefix}wdd_subscription_logs (
 | `wdd_sub_auto_renew` | `true` | Enable automatic renewal |
 | `wdd_sub_retry_attempts` | `3` | Number of failed payment retry attempts |
 | `wdd_sub_retry_intervals` | `[1, 3, 5]` | Days between retries |
-| `wdd_sub_overdue_days` | `7` | Days past_due before suspension |
-| `wdd_sub_cancel_days` | `14` | Days past_due before cancellation |
-| `wdd_sub_grace_period_days` | `0` | Days license stays active after cancel |
-| `wdd_sub_proration_mode` | `prorated` | `prorated` or `next_cycle` |
+| `wdd_sub_active_grace_days` | `7` | Days in past_due before suspension (access remains active) |
+| `wdd_sub_suspended_grace_days` | `7` | Days suspended before hard cancellation (retries continue) |
+| `wdd_sub_proration_mode` | `apply_at_renewal` | `prorate_immediately`, `apply_at_renewal`, or `no_proration` |
+| `wdd_sub_skip_limit` | `1` | Max skip-next-renewal uses per billing year per customer (0 = unlimited) |
+| `wdd_sub_renewal_sync` | `false` | Align all renewals to a fixed calendar date on first payment |
+| `wdd_sub_renewal_sync_date` | `1` | Day of month to align renewals to (1–28) when sync enabled |
+| `wdd_sub_one_trial_per_customer` | `true` | Block trial if `_wdd_trial_used` user meta is set |
+| `wdd_sub_trial_role` | `''` | WP role assigned during active trial (reverted on conversion or cancel) |
+| `wdd_sub_active_role` | `''` | WP role assigned when subscription is active |
+| `wdd_sub_cancelled_role` | `''` | WP role assigned when subscription is cancelled/expired |
 | `wdd_sub_renewal_reminder_days` | `[7, 3, 1]` | Days before renewal to send reminder emails |
 | `wdd_sub_allow_pause` | `true` | Allow customers to pause |
 | `wdd_sub_allow_cancel` | `true` | Allow customers to self-cancel |
 | `wdd_sub_allow_upgrade` | `true` | Allow customers to upgrade/downgrade |
 | `wdd_sub_cancel_saas_immediately` | `false` | Suspend SaaS on cancel (vs. at period end) |
+
+---
+
+## Retention Flow (Cancellation)
+
+When a customer initiates cancellation, a retention flow is presented before the subscription is cancelled. This is inspired by ArraySubs and is Phase 2.
+
+```
+Customer clicks "Cancel" → Retention Flow starts
+    │
+    ├── Step 1: Cancellation reason selection (configurable list)
+    │       Options: "Too expensive", "Not using it", "Missing features", "Switching provider", "Other"
+    │
+    └── Step 2: Retention offer (based on reason — configurable per reason or global)
+            ├── Offer type A: Discount coupon  → Apply X% off for N renewals
+            ├── Offer type B: Pause            → Offer to pause instead of cancel
+            ├── Offer type C: Skip next cycle  → Skip the next billing charge
+            └── Offer type D: Downgrade        → Switch to a lower-tier plan
+                │
+                ├── Customer accepts offer → Apply offer, cancel flow aborted, log retention
+                └── Customer declines offer → Proceed with cancellation as normal
+```
+
+Retention data is stored in subscription logs and surfaced in admin reports (reason breakdown, offer acceptance rate).
+
+**Product meta:** `_wdd_sub_retention_enabled` (bool), `_wdd_sub_retention_reasons` (JSON array), `_wdd_sub_retention_offer_type` (string).
+
+---
+
+## One Trial Per Customer
+
+When `wdd_sub_one_trial_per_customer` is enabled, the trial period is only available to customers who have never trialled this product before.
+
+```php
+// On checkout: if product has trial AND option is enabled
+$used = get_user_meta( $user_id, '_wdd_trial_used_' . $product_id, true );
+if ( $used ) {
+    // Strip trial from subscription; charge full price from Day 1
+}
+
+// On trial conversion (first charge collected):
+update_user_meta( $user_id, '_wdd_trial_used_' . $product_id, true );
+```
+
+Meta key per product: `_wdd_trial_used_{product_id}`. This prevents trial abuse via cancel + resubscribe.
+
+---
+
+## Stepped Renewal Pricing
+
+Allows an introductory price for the first N billing cycles, then a permanent step to the regular price.
+
+**Example:** $9/mo for 3 months, then $29/mo ongoing.
+
+```
+Product meta:
+    _wdd_sub_price      = 9.00   (introductory price)
+    _wdd_sub_step_price = 29.00  (price after N cycles)
+    _wdd_sub_step_after = 3      (switch after cycle 3)
+
+DB: wp_wdd_subscriptions.renewal_count (INT) — incremented on each successful renewal.
+
+RenewalEngine::process_renewal():
+    if step_price > 0 AND renewal_count >= step_after:
+        use step_price for this renewal order
+```
+
+**DB addition:** add `renewal_count INT UNSIGNED DEFAULT 0` to `wp_wdd_subscriptions`.
+
+---
+
+## Renewal Sync
+
+When enabled, all subscriptions for a product align to a fixed calendar date (e.g., the 1st of each month). This simplifies accounting and revenue prediction.
+
+```
+Customer subscribes on June 15.
+wdd_sub_renewal_sync = true, wdd_sub_renewal_sync_date = 1
+
+First payment: prorated amount for June 15 → July 1 (16 days / 30 days × price).
+Second payment: full price on July 1.
+All subsequent: 1st of each month.
+```
+
+When sync is enabled, the first renewal order is a partial charge (prorated to the sync date). Thereafter, billing is always on the configured day of month.
+
+---
+
+## Role Mapping
+
+WDD can automatically assign WordPress user roles based on subscription status. Useful for gating content behind subscriber roles (e.g., MemberPress-style).
+
+| Status transition | Role action |
+|---|---|
+| Trial starts | Assign `wdd_sub_trial_role` (if configured) |
+| Trial converts → active | Remove trial role, assign `wdd_sub_active_role` |
+| Active → suspended / cancelled / expired | Remove active role, assign `wdd_sub_cancelled_role` |
+| Resubscribe | Re-assign active role |
+
+**Implementation:** `RoleManager` class listens to `wdd_subscription_status_changed` action. Uses `wp_update_user` / `WP_User::add_role()` / `WP_User::remove_role()`.
+
+Roles are per-subscription-product, configured via product meta: `_wdd_sub_role_trial`, `_wdd_sub_role_active`, `_wdd_sub_role_cancelled`.
 
 ---
 
