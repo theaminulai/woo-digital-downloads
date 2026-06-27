@@ -24,30 +24,39 @@ use WooDigitalDownloads\SaaS\AccountProvisioner;
  */
 class Dashboard {
 
-    /** @var array<string,string>  slug => label */
-    private array $tabs = [];
+    /** @var string[]  Endpoint slugs — labels resolved lazily after 'init' via get_tabs(). */
+    private array $slugs = [ 'wdd-licenses', 'wdd-downloads', 'wdd-api-keys' ];
 
     public function __construct() {
-        $this->tabs = [
-            'wdd-licenses'  => __( 'My Licenses',  'woo-digital-downloads' ),
-            'wdd-downloads' => __( 'Downloads',     'woo-digital-downloads' ),
-            'wdd-api-keys'  => __( 'API Keys',      'woo-digital-downloads' ),
-        ];
-
-        add_filter( 'woocommerce_account_menu_items',     [ $this, 'add_menu_items' ] );
-        add_filter( 'woocommerce_get_query_vars',         [ $this, 'add_query_vars' ] );
+        add_filter( 'woocommerce_account_menu_items',        [ $this, 'add_menu_items' ] );
+        add_filter( 'woocommerce_get_query_vars',            [ $this, 'add_query_vars' ] );
         add_filter( 'woocommerce_account_menu_item_classes', [ $this, 'menu_item_classes' ], 10, 2 );
 
-        foreach ( array_keys( $this->tabs ) as $slug ) {
+        foreach ( $this->slugs as $slug ) {
             add_action( "woocommerce_account_{$slug}_endpoint", [ $this, 'render_tab' ] );
         }
 
         add_action( 'init', [ $this, 'add_endpoints' ] );
     }
 
+    /**
+     * Returns slug => translated label map.
+     * Always call this instead of $this->tabs directly when labels are needed,
+     * so __() is never executed before the text domain is loaded.
+     *
+     * @return array<string,string>
+     */
+    private function get_tabs(): array {
+        return [
+            'wdd-licenses'  => __( 'My Licenses',  'woo-digital-downloads' ),
+            'wdd-downloads' => __( 'Downloads',     'woo-digital-downloads' ),
+            'wdd-api-keys'  => __( 'API Keys',      'woo-digital-downloads' ),
+        ];
+    }
+
     /** Register WooCommerce endpoints. */
     public function add_endpoints(): void {
-        foreach ( array_keys( $this->tabs ) as $slug ) {
+        foreach ( $this->slugs as $slug ) {
             add_rewrite_endpoint( $slug, EP_ROOT | EP_PAGES );
         }
     }
@@ -63,7 +72,7 @@ class Dashboard {
         $logout = $items['customer-logout'] ?? null;
         unset( $items['customer-logout'] );
 
-        foreach ( $this->tabs as $slug => $label ) {
+        foreach ( $this->get_tabs() as $slug => $label ) {
             $items[ $slug ] = $label;
         }
 
@@ -81,7 +90,7 @@ class Dashboard {
      * @return array<string,string>
      */
     public function add_query_vars( array $vars ): array {
-        foreach ( array_keys( $this->tabs ) as $slug ) {
+        foreach ( $this->slugs as $slug ) {
             $vars[ $slug ] = $slug;
         }
         return $vars;
@@ -111,7 +120,7 @@ class Dashboard {
         global $wp;
 
         $active = '';
-        foreach ( array_keys( $this->tabs ) as $slug ) {
+        foreach ( $this->slugs as $slug ) {
             if ( isset( $wp->query_vars[ $slug ] ) ) {
                 $active = $slug;
                 break;

@@ -42,6 +42,8 @@ The Plugin Updates module is optional — you can issue license keys without pro
 | `LicenseValidator` | `includes/Licensing/LicenseValidator.php` | Validate key + return plan features |
 | `LicenseExpiry` | `includes/Licensing/LicenseExpiry.php` | Cron-based expiry enforcement |
 | `LicenseRevoke` | `includes/Licensing/LicenseRevoke.php` | Instant kill-switch |
+| `LicenseCertificate` | `includes/Licensing/LicenseCertificate.php` | Generate PDF license certificate (Phase 3) |
+| `LicenseMigrator` | `includes/Licensing/LicenseMigrator.php` | Import licenses from DLM or WC Serial Numbers (Phase 3) |
 
 ### License Key Format
 
@@ -239,6 +241,62 @@ Authorization: WordPress nonce (manage_woocommerce required)
 
 ---
 
+## PDF License Certificates (Phase 3)
+
+Inspired by Digital License Manager (DLM). When enabled, a "Download Certificate" button appears on the Licenses tab. The certificate is a PDF containing:
+
+- Plugin/product branding header
+- License key (large, clearly printed)
+- Licensee name and email
+- Activation limit and expiry
+- Date of purchase and order number
+
+**Implementation:** `spipu/html2pdf` Composer package renders an HTML template to PDF.
+
+```php
+// LicenseCertificate::generate( $license_id ): string  (returns PDF binary)
+$html2pdf = new \Spipu\Html2Pdf\Html2Pdf( 'P', 'A4', 'en' );
+$html2pdf->writeHTML( $this->get_template( $license ) );
+return $html2pdf->output( '', 'S' ); // 'S' = return as string
+```
+
+Template overridable in `your-theme/wdd/license-certificate.html`.
+
+> **Note:** The PDF generation key (`WDD_PDF_ENCRYPTION_KEY`) must be backed up separately. If lost, existing certificates cannot be regenerated with the same visual hash/QR code for verification purposes.
+
+---
+
+## Migration Tool (Phase 3)
+
+`LicenseMigrator` provides a WP-CLI command and admin UI to import existing licenses:
+
+```bash
+wp wdd license migrate --from=dlm --dry-run
+wp wdd license migrate --from=wc-serial-numbers
+```
+
+Imports:
+- License keys (preserved as-is)
+- Activation records (domain + environment)
+- Order and user associations
+- Status (active/expired/revoked)
+
+Supported sources: Digital License Manager (DLM), WC Serial Numbers.
+
+---
+
+## Order Item Meta
+
+When a license is created for an order item, the license ID is stored as order item meta:
+
+```php
+wc_add_order_item_meta( $item_id, '_wdd_license_id', $license_id );
+```
+
+This makes the license accessible from the order item in admin and via WC REST API without an extra query.
+
+---
+
 ## Product Meta Fields
 
 Set via WDD meta box on each WooCommerce product:
@@ -249,6 +307,7 @@ Set via WDD meta box on each WooCommerce product:
 | `_wdd_activation_limit` | int | Max domains (ignored for `unlimited`) |
 | `_wdd_license_duration_days` | int | Days until expiry; empty = lifetime |
 | `_wdd_plugin_slug` | string | Plugin slug (used by Update module) |
+| `_wdd_license_certificate` | bool | Show PDF certificate download button in My Account |
 
 ---
 
@@ -256,10 +315,35 @@ Set via WDD meta box on each WooCommerce product:
 
 The Licenses tab (`/my-account/wdd-licenses/`) shows:
 - Product name
-- License key (click to copy)
+- License key — displayed blurred by default; click to reveal (prevents shoulder-surfing)
+- Copy-to-clipboard button next to revealed key (JS clipboard API with fallback)
 - Status badge (active / expired / revoked / suspended)
 - Sites used / limit (or ∞ for unlimited)
 - Expiry date (or "Lifetime")
+- **Manual activation row:** Customer can enter a domain URL and click "Activate" directly from My Account — no plugin install required for simple use cases
+- **Download PDF Certificate** button (Phase 3 — when `LicenseCertificate` is enabled)
+
+### Manual Activation from My Account
+
+```
+Customer enters domain in My Account → POST to /wdd/v1/license/activate
+    Same flow as plugin-initiated activation
+    Domain and environment auto-detected from submitted URL
+    Result shown inline: "Activated on example.com (2 of 5 sites used)"
+```
+
+### License Key Reveal (UX)
+
+```html
+<!-- Blurred by default -->
+<code class="wdd-license-key wdd-license-key--hidden" data-key="XXXX-XXXX-XXXX-XXXX-XXXX">
+    ████-████-████-████-████
+</code>
+<button class="wdd-reveal-key">Click to reveal</button>
+<button class="wdd-copy-key" style="display:none">Copy</button>
+```
+
+JS toggles `wdd-license-key--hidden` class on reveal click. Copy button uses `navigator.clipboard.writeText()` with a `document.execCommand('copy')` fallback.
 
 ---
 
@@ -292,17 +376,22 @@ apply_filters( 'wdd_staging_exempt_patterns', $patterns );
 
 ## Competitor Comparison
 
-| Feature | WC Serial Numbers (free) | EDD Software Licensing ($199/yr) | woo-digital-downloads |
-|---|---|---|---|
-| Key generation | Import required (auto-gen = Pro) | Yes | **Yes (dynamic, no import)** |
-| Domain activation tracking | Basic via API | Yes | **Yes, per-domain DB record** |
-| Staging/localhost exemption | No | Basic | **Yes, pattern-based** |
-| Activation limit enforcement | Yes | Yes | **Yes** |
-| Remote kill-switch | No | Yes | **Yes** |
-| Lifetime licenses | No | Yes | **Yes** |
-| Multi-site plans | Partial | Yes | **Yes** |
-| REST API | Yes | Yes | **Yes** |
-| WooCommerce native | Yes | No (EDD only) | **Yes** |
-| Plugin Update delivery | No | Yes (add-on) | **Yes (separate module)** |
-| HPOS compatible | Yes | No | **Yes** |
-| Price | Free + Pro | $199/yr | **Included in WDD** |
+| Feature | WC Serial Numbers (free) | EDD Software Licensing ($199/yr) | Digital License Manager (DLM) | woo-digital-downloads |
+|---|---|---|---|---|
+| Key generation | Import required (auto-gen = Pro) | Yes | Yes (dynamic) | **Yes (dynamic, no import)** |
+| Domain activation tracking | Basic via API | Yes | Yes | **Yes, per-domain DB record** |
+| Staging/localhost exemption | No | Basic | No | **Yes, pattern-based** |
+| Activation limit enforcement | Yes | Yes | Yes | **Yes** |
+| Remote kill-switch | No | Yes | Yes | **Yes** |
+| Lifetime licenses | No | Yes | Yes | **Yes** |
+| Multi-site plans | Partial | Yes | Yes | **Yes** |
+| REST API | Yes | Yes | Yes | **Yes** |
+| WooCommerce native | Yes | No (EDD only) | Yes | **Yes** |
+| Plugin Update delivery | No | Yes (add-on) | No | **Yes (separate module)** |
+| PDF license certificate | No | No | Yes (Pro) | **Yes (Phase 3)** |
+| License reveal (blur/click) | No | No | Yes | **Yes** |
+| Copy-to-clipboard | No | No | Yes | **Yes** |
+| My Account manual activation | No | No | Yes (free) | **Yes** |
+| Migration tool (from DLM/SN) | No | No | No | **Yes (Phase 3)** |
+| HPOS compatible | Yes | No | Partial | **Yes** |
+| Price | Free + Pro | $199/yr | Free + Pro | **Included in WDD** |
